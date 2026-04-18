@@ -114,14 +114,38 @@ public final class UpdateCheckerService {
         }
 
         if (isUpdateAvailable(currentVersion, latestVersion)) {
-            plugin.getLogger().warning("[UpdateChecker] Доступно обновление CloverChat");
-            plugin.getLogger().warning("[UpdateChecker] Текущая версия: " + currentVersion + ", новая версия: " + latestVersion);
-            plugin.getLogger().warning("[UpdateChecker] Обновите плагин: " + releaseUrl);
+            logUpdateAvailableBlock(currentVersion, latestVersion, releaseUrl);
             return;
         }
 
         if (plugin.configuration().getBoolean("update-checker.log-no-update", false)) {
             plugin.getLogger().info("[UpdateChecker] Установлена актуальная версия: " + currentVersion);
+        }
+    }
+
+    private void logUpdateAvailableBlock(String currentVersion, String latestVersion, String releaseUrl) {
+        List<String> lines = plugin.configuration().getStringList("update-checker.update-available-log-lines");
+        if (lines.isEmpty()) {
+            lines = List.of(
+                    " ",
+                    "╔════════════════════════════════════════════════════╗",
+                    "║                CloverChat Update                  ║",
+                    "║                                                    ║",
+                    "║  Доступна новая версия плагина                     ║",
+                    "║  Текущая: %current_version%                        ║",
+                    "║  Новая:   %latest_version%                         ║",
+                    "║  Загрузить: %release_url%                          ║",
+                    "╚════════════════════════════════════════════════════╝",
+                    " "
+            );
+        }
+
+        for (String line : lines) {
+            String resolved = line
+                    .replace("%current_version%", currentVersion)
+                    .replace("%latest_version%", latestVersion)
+                    .replace("%release_url%", releaseUrl);
+            plugin.getLogger().warning(resolved);
         }
     }
 
