@@ -5,6 +5,7 @@ import com.slyph.cloverchat.command.ReloadCommand;
 import com.slyph.cloverchat.command.completer.PrivateMessageTabCompleter;
 import com.slyph.cloverchat.command.completer.ReloadTabCompleter;
 import com.slyph.cloverchat.feature.headmessage.HeadMessageService;
+import com.slyph.cloverchat.feature.updatechecker.UpdateCheckerService;
 import com.slyph.cloverchat.listener.ChatListener;
 import com.slyph.cloverchat.listener.CommandCooldownListener;
 import com.slyph.cloverchat.listener.JoinQuitListener;
@@ -24,12 +25,14 @@ public final class CloverChatPlugin extends JavaPlugin {
 
     private boolean placeholderApiHooked;
     private HeadMessageService headMessageService;
+    private UpdateCheckerService updateCheckerService;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
         placeholderApiHooked = getServer().getPluginManager().getPlugin("PlaceholderAPI") != null;
         headMessageService = new HeadMessageService(this);
+        updateCheckerService = new UpdateCheckerService(this);
 
         getServer().getPluginManager().registerEvents(new ChatListener(this), this);
         getServer().getPluginManager().registerEvents(new JoinQuitListener(this), this);
@@ -49,12 +52,17 @@ public final class CloverChatPlugin extends JavaPlugin {
             reloadPluginCommand.setExecutor(reloadCommand);
             reloadPluginCommand.setTabCompleter(new ReloadTabCompleter());
         }
+
+        updateCheckerService.start();
     }
 
     @Override
     public void onDisable() {
         if (headMessageService != null) {
             headMessageService.clearAll();
+        }
+        if (updateCheckerService != null) {
+            updateCheckerService.stop();
         }
     }
 
@@ -95,6 +103,13 @@ public final class CloverChatPlugin extends JavaPlugin {
         for (String line : lines) {
             String resolved = applyPlaceholders(placeholderContext, line);
             recipient.sendMessage(deserializeColored(resolved));
+        }
+    }
+
+    public void reloadPluginConfiguration() {
+        reloadConfig();
+        if (updateCheckerService != null) {
+            updateCheckerService.restart();
         }
     }
 }

@@ -1,5 +1,13 @@
 hex-colors: true
 
+update-checker:
+  enabled: true
+  repository: "slyphmp4/CloverChat"
+  check-on-startup: true
+  check-interval-hours: 6
+  request-timeout-seconds: 10
+  log-no-update: false
+
 chat-name-placeholders:
   - "%player_name%"
   - "%cloverrep_nick%"

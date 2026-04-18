@@ -37,7 +37,7 @@ public final class ReloadCommand implements CommandExecutor {
             return true;
         }
 
-        plugin.reloadConfig();
+        plugin.reloadPluginConfiguration();
 
         List<String> successLines = plugin.configuration().getStringList("system-messages.reload-success");
         if (successLines.isEmpty()) {
