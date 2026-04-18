@@ -7,6 +7,17 @@ update-checker:
   check-interval-hours: 6
   request-timeout-seconds: 10
   log-no-update: false
+  update-available-log-lines:
+    - " "
+    - "╔════════════════════════════════════════════════════╗"
+    - "║                CloverChat Update                  ║"
+    - "║                                                    ║"
+    - "║  Доступна новая версия плагина                     ║"
+    - "║  Текущая: %current_version%                        ║"
+    - "║  Новая:   %latest_version%                         ║"
+    - "║  Загрузить: %release_url%                          ║"
+    - "╚════════════════════════════════════════════════════╝"
+    - " "
 
 chat-name-placeholders:
   - "%player_name%"
