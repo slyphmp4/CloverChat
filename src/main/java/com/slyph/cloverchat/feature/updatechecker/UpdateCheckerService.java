@@ -124,21 +124,18 @@ public final class UpdateCheckerService {
     }
 
     private void logUpdateAvailableBlock(String currentVersion, String latestVersion, String releaseUrl) {
-        List<String> lines = plugin.configuration().getStringList("update-checker.update-available-log-lines");
-        if (lines.isEmpty()) {
-            lines = List.of(
-                    " ",
-                    "╔════════════════════════════════════════════════════╗",
-                    "║                CloverChat Update                  ║",
-                    "║                                                    ║",
-                    "║  Доступна новая версия плагина                     ║",
-                    "║  Текущая: %current_version%                        ║",
-                    "║  Новая:   %latest_version%                         ║",
-                    "║  Загрузить: %release_url%                          ║",
-                    "╚════════════════════════════════════════════════════╝",
-                    " "
-            );
-        }
+        List<String> lines = List.of(
+                " ",
+                "╔════════════════════════════════════════════════════╗",
+                "║                CloverChat Update                  ║",
+                "║                                                    ║",
+                "║  Доступна новая версия плагина                     ║",
+                "║  Текущая: %current_version%                        ║",
+                "║  Новая:   %latest_version%                         ║",
+                "║  Загрузить: %release_url%                          ║",
+                "╚════════════════════════════════════════════════════╝",
+                " "
+        );
 
         for (String line : lines) {
             String resolved = line
