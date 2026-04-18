@@ -35,6 +35,16 @@ processResources {
     }
 }
 
+tasks.jar {
+    enabled = false
+}
+
+tasks.shadowJar {
+    archiveBaseName.set('CloverChat')
+    archiveVersion.set('')
+    archiveClassifier.set('')
+}
+
 tasks.build {
     dependsOn tasks.shadowJar
 }
