@@ -20,6 +20,11 @@ public final class UpdateCheckerService {
     private static final Pattern TAG_PATTERN = Pattern.compile("\"tag_name\"\\s*:\\s*\"([^\"]+)\"");
     private static final Pattern URL_PATTERN = Pattern.compile("\"html_url\"\\s*:\\s*\"([^\"]+)\"");
     private static final Pattern NUMBER_PATTERN = Pattern.compile("\\d+");
+    private static final String REPOSITORY = "slyphmp4/CloverChat";
+    private static final boolean CHECK_ON_STARTUP = true;
+    private static final long CHECK_INTERVAL_HOURS = 6L;
+    private static final int REQUEST_TIMEOUT_SECONDS = 10;
+    private static final boolean LOG_NO_UPDATE = false;
 
     private final CloverChatPlugin plugin;
     private final HttpClient httpClient;
@@ -37,11 +42,11 @@ public final class UpdateCheckerService {
             return;
         }
 
-        if (plugin.configuration().getBoolean("update-checker.check-on-startup", true)) {
+        if (CHECK_ON_STARTUP) {
             Bukkit.getScheduler().runTaskAsynchronously(plugin, this::checkNow);
         }
 
-        long intervalHours = plugin.configuration().getLong("update-checker.check-interval-hours", 6L);
+        long intervalHours = CHECK_INTERVAL_HOURS;
         if (intervalHours <= 0L) {
             return;
         }
@@ -62,14 +67,14 @@ public final class UpdateCheckerService {
     }
 
     private void checkNow() {
-        String repository = normalizeRepository(plugin.configuration().getString("update-checker.repository", "slyphmp4/CloverChat"));
+        String repository = normalizeRepository(REPOSITORY);
         if (repository == null) {
-            plugin.getLogger().warning("[UpdateChecker] Неверный формат update-checker.repository");
+            plugin.getLogger().warning("[UpdateChecker] Неверный формат репозитория для проверки обновлений");
             return;
         }
 
         String currentVersion = plugin.getDescription().getVersion();
-        int timeoutSeconds = Math.max(3, plugin.configuration().getInt("update-checker.request-timeout-seconds", 10));
+        int timeoutSeconds = Math.max(3, REQUEST_TIMEOUT_SECONDS);
         String endpoint = "https://api.github.com/repos/" + repository + "/releases/latest";
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -118,7 +123,7 @@ public final class UpdateCheckerService {
             return;
         }
 
-        if (plugin.configuration().getBoolean("update-checker.log-no-update", false)) {
+        if (LOG_NO_UPDATE) {
             plugin.getLogger().info("[UpdateChecker] Установлена актуальная версия: " + currentVersion);
         }
     }
