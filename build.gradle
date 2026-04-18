@@ -4,7 +4,43 @@ plugins {
 }
 
 group = 'com.slyph'
-version = '1.6.0'
+version = providers.gradleProperty('pluginVersion').getOrElse('1.6.0')
+
+def versionFile = file('gradle.properties')
+
+def parseVersion = { String input ->
+    def matcher = (input =~ /(\d+)\.(\d+)\.(\d+)/)
+    if (!matcher.matches()) {
+        throw new GradleException("Invalid pluginVersion format: ${input}")
+    }
+    return [
+            matcher[0][1].toInteger(),
+            matcher[0][2].toInteger(),
+            matcher[0][3].toInteger()
+    ]
+}
+
+def writeVersion = { int major, int minor, int patch ->
+    String updated = "${major}.${minor}.${patch}"
+    versionFile.text = "pluginVersion=${updated}\n"
+    println "pluginVersion=${updated}"
+}
+
+tasks.register('bumpPatchVersion') {
+    doLast {
+        String current = providers.gradleProperty('pluginVersion').getOrElse('1.6.0').get()
+        def parts = parseVersion(current)
+        writeVersion(parts[0], parts[1], parts[2] + 1)
+    }
+}
+
+tasks.register('bumpMinorVersion') {
+    doLast {
+        String current = providers.gradleProperty('pluginVersion').getOrElse('1.6.0').get()
+        def parts = parseVersion(current)
+        writeVersion(parts[0], parts[1] + 1, 0)
+    }
+}
 
 java {
     toolchain {

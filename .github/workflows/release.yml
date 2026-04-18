@@ -3,10 +3,14 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: Release tag
+      update_type:
+        description: Update type
         required: true
-        type: string
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
       make_latest:
         description: Mark release as latest
         required: false
@@ -34,14 +38,33 @@ jobs:
       - name: Grant Execute Permission
         run: chmod +x gradlew
 
+      - name: Bump Version
+        id: bump
+        run: |
+          if [ "${{ inputs.update_type }}" = "minor" ]; then
+            ./gradlew bumpMinorVersion --no-daemon
+          else
+            ./gradlew bumpPatchVersion --no-daemon
+          fi
+          VERSION=$(grep '^pluginVersion=' gradle.properties | cut -d'=' -f2)
+          echo "value=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit Version
+        run: |
+          git config user.name "slyphmp4"
+          git config user.email "slyphmp4@users.noreply.github.com"
+          git add gradle.properties
+          git commit -m "chore: bump plugin version to ${{ steps.bump.outputs.value }}" || true
+          git push origin HEAD:${GITHUB_REF_NAME}
+
       - name: Build
         run: ./gradlew build --no-daemon
 
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
-          tag: ${{ inputs.tag }}
-          name: ${{ inputs.tag }}
+          tag: v${{ steps.bump.outputs.value }}
+          name: v${{ steps.bump.outputs.value }}
           artifacts: build/libs/*.jar
           allowUpdates: true
           generateReleaseNotes: true
