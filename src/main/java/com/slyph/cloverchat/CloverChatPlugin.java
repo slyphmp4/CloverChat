@@ -16,9 +16,11 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.File;
 import java.util.List;
 
 public final class CloverChatPlugin extends JavaPlugin {
@@ -26,10 +28,13 @@ public final class CloverChatPlugin extends JavaPlugin {
     private boolean placeholderApiHooked;
     private HeadMessageService headMessageService;
     private UpdateCheckerService updateCheckerService;
+    private FileConfiguration messagesConfiguration;
+    private FileConfiguration hoversConfiguration;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        loadAdditionalConfigurations();
         placeholderApiHooked = getServer().getPluginManager().getPlugin("PlaceholderAPI") != null;
         headMessageService = new HeadMessageService(this);
         updateCheckerService = new UpdateCheckerService(this);
@@ -70,6 +75,14 @@ public final class CloverChatPlugin extends JavaPlugin {
         return getConfig();
     }
 
+    public FileConfiguration messages() {
+        return messagesConfiguration;
+    }
+
+    public FileConfiguration hovers() {
+        return hoversConfiguration;
+    }
+
     public boolean isPlaceholderApiHooked() {
         return placeholderApiHooked;
     }
@@ -108,8 +121,16 @@ public final class CloverChatPlugin extends JavaPlugin {
 
     public void reloadPluginConfiguration() {
         reloadConfig();
+        loadAdditionalConfigurations();
         if (updateCheckerService != null) {
             updateCheckerService.restart();
         }
+    }
+
+    private void loadAdditionalConfigurations() {
+        saveResource("messages.yml", false);
+        saveResource("hovers.yml", false);
+        messagesConfiguration = YamlConfiguration.loadConfiguration(new File(getDataFolder(), "messages.yml"));
+        hoversConfiguration = YamlConfiguration.loadConfiguration(new File(getDataFolder(), "hovers.yml"));
     }
 }

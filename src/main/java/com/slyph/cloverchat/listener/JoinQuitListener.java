@@ -28,7 +28,7 @@ public final class JoinQuitListener implements Listener {
         event.joinMessage(null);
         Player joinedPlayer = event.getPlayer();
 
-        List<String> lines = plugin.configuration().getStringList("join-message.lines");
+        List<String> lines = plugin.messages().getStringList("join-message.lines");
         if (lines.isEmpty()) {
             lines = Arrays.asList("&7", "&a+ %player_name% зашел на сервер", "&7");
         }
@@ -49,7 +49,7 @@ public final class JoinQuitListener implements Listener {
 
         event.quitMessage(null);
 
-        List<String> lines = plugin.configuration().getStringList("leave-message.lines");
+        List<String> lines = plugin.messages().getStringList("leave-message.lines");
         if (lines.isEmpty()) {
             lines = Arrays.asList("&7", "&c- %player_name% вышел с сервера", "&7");
         }

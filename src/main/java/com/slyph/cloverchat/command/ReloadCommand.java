@@ -20,7 +20,7 @@ public final class ReloadCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("cloverchat.command.reload")) {
-            List<String> noPermission = plugin.configuration().getStringList("system-messages.reload-no-permission");
+            List<String> noPermission = plugin.messages().getStringList("system-messages.reload-no-permission");
             if (noPermission.isEmpty()) {
                 noPermission = Arrays.asList("&7", "&cУ вас нет права на эту команду", "&7");
             }
@@ -29,7 +29,7 @@ public final class ReloadCommand implements CommandExecutor {
         }
 
         if (args.length != 1 || !args[0].equalsIgnoreCase("confirm")) {
-            List<String> usageLines = plugin.configuration().getStringList("system-messages.reload-usage");
+            List<String> usageLines = plugin.messages().getStringList("system-messages.reload-usage");
             if (usageLines.isEmpty()) {
                 usageLines = Arrays.asList("&7", "&eИспользование: /cloverchatreload confirm", "&7");
             }
@@ -39,7 +39,7 @@ public final class ReloadCommand implements CommandExecutor {
 
         plugin.reloadPluginConfiguration();
 
-        List<String> successLines = plugin.configuration().getStringList("system-messages.reload-success");
+        List<String> successLines = plugin.messages().getStringList("system-messages.reload-success");
         if (successLines.isEmpty()) {
             successLines = Arrays.asList("&7", "&aCloverChat успешно перезагружен", "&7");
         }

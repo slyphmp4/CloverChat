@@ -49,7 +49,7 @@ public final class CommandCooldownListener implements Listener {
             long diff = now - last;
             if (diff < cooldownMillis) {
                 long remain = Math.max(1, (cooldownMillis - diff + 999) / 1000);
-                List<String> lines = plugin.configuration().getStringList("commands-cooldown.message");
+                List<String> lines = plugin.messages().getStringList("commands-cooldown.message");
                 if (lines.isEmpty()) {
                     lines = Arrays.asList("&7", "&cПодождите %remain% сек. перед следующей командой", "&7");
                 }
