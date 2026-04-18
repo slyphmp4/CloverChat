@@ -13,75 +13,26 @@ chat-reputation-placeholders:
 reputation-hover:
   enabled: true
   suggest-command: "/rep "
-  lines:
-    - "&#2EFF54 🧪 — &lРепутация"
-    - "&7"
-    - "&#ACE3B2 ▪ На сервере есть система репутации, которая помогает увидеть "
-    - "&#ACE3B2   рейтинг игрока, тем самым оценивая качество коммуникаци"
-    - "&#ACE3B2   игрока на сервере"
-    - "&7"
-    - "&#73FF86 ♠ Текущий счет: %cloverrep_reputation%"
-    - "&7"
-    - "&#E0E0E0 ✎ Нажмите, чтобы оценить игрока"
 
 local-chat:
   enabled: true
   radius: 70
-  format: "&#20a688[&#40e7afʟ&#20a688] &#c0ffec• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#4f5b58→ &#d6fff7%message%"
 
 global-chat:
   enabled: true
   prefix: "!"
-  format: "&#4ea62f[&#6de743ɢ&#4ea62f] &#d0ffc0• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#525b4f→ &#e0ffd6%message%"
 
 private-chat:
   enabled: true
   cooldown-seconds: 5
   notification-sound: "minecraft:block.note_block.pling"
-  format-sender: "&#c18c22[&#ffbb32✉&#c18c22] &#ffecc6• &#ffc653&lВы &#69645b» &#ffc653%target_name% &#5b574f→ &#fff2d9%message%"
-  format-receiver: "&#c18c22[&#ffbb32✉&#c18c22] &#ffecc6• &#ffc653&l%player_name% &#69645b» &#ffc653Вам &#5b574f→ &#fff2d9%message%"
-  usage-message:
-    - "&7"
-    - "&#24e765★ ЛС  &#89ffa6|  &#24e765/m <ник_игрока> <сообщение>"
-    - "&7"
-  offline-player-message:
-    - "&7"
-    - "&#c72b2b❌ Ошибка  &#ff9089|  &#ff5a5aИгрок &#ff4d4d&l%target_name% &#ff5a5aне в сети"
-    - "&7"
-  cooldown-message:
-    - "&7"
-    - "&#c72b2b❌ Ошибка  &#ff9089|  &#ff5a5aПодождите &#ff4d4d&l%remain% &#ff5a5aсекунд перед отправкой ЛС"
-    - "&7"
-  disabled-message:
-    - "&7"
-    - "&#c72b2b❌ Ошибка  &#ff9089|  &#ff5a5aЛичные сообщения отключены"
-    - "&7"
-  no-permission-message:
-    - "&7"
-    - "&#c72b2b❌ Ошибка  &#ff9089|  &#ff5a5aУ вас нет права на личные сообщения"
-    - "&7"
-  non-player-message:
-    - "&7"
-    - "&#c72b2b❌ Ошибка  &#ff9089|  &#ff5a5aЭта команда доступна только игрокам"
-    - "&7"
 
 quick-pm:
   enabled: true
   require-sneak: false
   suggest-command: "/m %target_name% "
-  message-lines:
-    - "&7"
-    - "&#24e765★ ЛС  &#89ffa6|  &#24e765Нажмите, чтобы написать &#b2ffd8%target_name%"
-    - "&7"
-  hover-lines:
-    - "&7"
-    - "&#3FF2D6✉ Быстрое ЛС"
-    - "&#BDFEF3Получатель: &#7DFDEA%target_name%"
-    - "&7"
-    - "&#D9FFF8Клик: вставить /m %target_name%"
 
 mention:
-  highlight-format: "&#ff5e0d&l@%mention%&r"
   sound: "minecraft:block.note_block.pling"
 
 chat-above-head:
@@ -89,108 +40,23 @@ chat-above-head:
   duration-seconds: 4
   y-offset: 2.25
   max-length: 72
-  format: "&#F4830B🗩 &#FFECD9%message%"
   combo-enabled: true
-  combo-format: " &#FFD479(+%combo%)"
-
-hover-text:
-  - "&#ff5e0d[✉] &#ffc8a8Нажмите, чтобы"
-  - "&#ffc8a8написать в личные сообщения"
 
 prefix-hover:
   enabled: true
-  default-lines:
-    - "&7"
-  rules:
-    admin:
-      priority: 300
-      match-type: permission-any
-      permissions:
-        - "cloverchat.rank.admin"
-        - "ultrapermissions.group.admin"
-      lines:
-        - "&#FF2E2E ⚑ — &lАдмин"
-        - "&7"
-        - "&#E3ACAC ▪ Данный игрок является администратором сервера,"
-        - "&#E3ACAC   который управляет большинством систем на сервере, тем самым"
-        - "&#E3ACAC   помогает игрокам разбираться возникшими проблемами в игре"
-        - "&7"
-        - "&#E0E0E0 ✉ Нажмите на ник игрока, чтобы написать ему в ЛС"
-    moderator:
-      priority: 200
-      match-type: permission-any
-      permissions:
-        - "cloverchat.rank.moderator"
-        - "ultrapermissions.group.moderator"
-      lines:
-        - "&#2EFFF5 ☁ — Модератор "
-        - "&7"
-        - "&#ACE3DB ▪ Этот значок обозначает то, что данный игрок "
-        - "&#ACE3DB   является модератором сервера, который по большенству своему "
-        - "&#ACE3DB   всегда решает и рассматривает жалобы, и проблемы игроков, "
-        - "&7"
-        - "&#E0E0E0 ✉ Нажмите на ник игрока, чтобы написать ему в ЛС "
-    default:
-      priority: 100
-      match-type: permission-any
-      permissions:
-        - "cloverchat.rank.default"
-        - "ultrapermissions.group.default"
-      lines:
-        - "&#9DA8A8 ♪ — Игрок"
-        - "&7"
-        - "&#C2C2C2 ▪ Этот значок обозначает то, что данный игрок"
-        - "&#C2C2C2   купил проходку на сервер и играет на нем"
-        - "&7"
-        - "&#E0E0E0 ✉ Нажмите на ник игрока, чтобы написать ему в ЛС"
 
 links:
   enabled: true
-  format: "&#ffcb1b&l*ссылка*"
-  hover-lines:
-    - "&7URL: &f%url%"
-    - "&7Нажмите, чтобы перейти"
 
 commands-cooldown:
   enabled: true
   seconds: 5
-  message:
-    - "&7"
-    - "&#c72b2b❌ Ошибка  &#ff9089|  &#ff5a5aПодождите &#ff4d4d&l%remain% &#ff5a5aсекунд перед следующей командой"
-    - "&7"
-
-no-chat-permission-message:
-  - "&7"
-  - "&#c72b2b❌ Ошибка  &#ff9089|  &#ff5a5aУ вас нет права писать в чат"
-  - "&7"
 
 join-message:
   enabled: true
-  lines:
-    - "&7"
-    - "&#59645c[&#1dff73+&#59645c] &#b0cab9%player_name% зашел на сервер"
-    - "&7"
 
 leave-message:
   enabled: true
-  lines:
-    - "&7"
-    - "&#645959[&#ff4848-&#645959] &#cab0b0%player_name% вышел с сервера"
-    - "&7"
-
-system-messages:
-  reload-usage:
-    - "&7"
-    - "&#24e765★ Чат  &#89ffa6|  &#24e765Использование: /cloverchatreload confirm"
-    - "&7"
-  reload-no-permission:
-    - "&7"
-    - "&#c72b2b❌ Ошибка  &#ff9089|  &#ff5a5aУ вас нет права на эту команду"
-    - "&7"
-  reload-success:
-    - "&7"
-    - "&#24e765★ Чат  &#89ffa6|  &#24e765Плагин успешно перезагружен"
-    - "&7"
 
 censor:
   enabled: true

@@ -27,7 +27,7 @@ public final class PrivateMessageCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player player)) {
-            List<String> nonPlayerLines = plugin.configuration().getStringList("private-chat.non-player-message");
+            List<String> nonPlayerLines = plugin.messages().getStringList("private-chat.non-player-message");
             if (nonPlayerLines.isEmpty()) {
                 nonPlayerLines = Arrays.asList("&7", "&cЭта команда доступна только игрокам", "&7");
             }
@@ -36,7 +36,7 @@ public final class PrivateMessageCommand implements CommandExecutor {
         }
 
         if (!player.hasPermission("cloverchat.pm")) {
-            List<String> noPermissionLines = plugin.configuration().getStringList("private-chat.no-permission-message");
+            List<String> noPermissionLines = plugin.messages().getStringList("private-chat.no-permission-message");
             if (noPermissionLines.isEmpty()) {
                 noPermissionLines = Arrays.asList("&7", "&cУ вас нет права на личные сообщения", "&7");
             }
@@ -45,7 +45,7 @@ public final class PrivateMessageCommand implements CommandExecutor {
         }
 
         if (!plugin.configuration().getBoolean("private-chat.enabled", true)) {
-            List<String> disabledLines = plugin.configuration().getStringList("private-chat.disabled-message");
+            List<String> disabledLines = plugin.messages().getStringList("private-chat.disabled-message");
             if (disabledLines.isEmpty()) {
                 disabledLines = Arrays.asList("&7", "&cЛичные сообщения отключены", "&7");
             }
@@ -54,7 +54,7 @@ public final class PrivateMessageCommand implements CommandExecutor {
         }
 
         if (args.length < 2) {
-            List<String> usageLines = plugin.configuration().getStringList("private-chat.usage-message");
+            List<String> usageLines = plugin.messages().getStringList("private-chat.usage-message");
             if (usageLines.isEmpty()) {
                 usageLines = Arrays.asList("&7", "&eИспользование: /m <ник> <сообщение>", "&7");
             }
@@ -74,7 +74,7 @@ public final class PrivateMessageCommand implements CommandExecutor {
                 long diff = cooldownCheckTimestamp - lastTime;
                 if (diff < cooldownMillis) {
                     long remain = Math.max(1, (cooldownMillis - diff + 999) / 1000);
-                    List<String> cooldownLines = plugin.configuration().getStringList("private-chat.cooldown-message");
+                    List<String> cooldownLines = plugin.messages().getStringList("private-chat.cooldown-message");
                     if (cooldownLines.isEmpty()) {
                         cooldownLines = Arrays.asList("&7", "&cПодождите %remain% сек. перед отправкой следующего ЛС", "&7");
                     }
@@ -90,7 +90,7 @@ public final class PrivateMessageCommand implements CommandExecutor {
         String targetName = args[0];
         Player target = findOnlinePlayer(targetName);
         if (target == null) {
-            List<String> offlineLines = plugin.configuration().getStringList("private-chat.offline-player-message");
+            List<String> offlineLines = plugin.messages().getStringList("private-chat.offline-player-message");
             if (offlineLines.isEmpty()) {
                 offlineLines = Arrays.asList("&7", "&cИгрок %target_name% не в сети", "&7");
             }
@@ -103,11 +103,11 @@ public final class PrivateMessageCommand implements CommandExecutor {
 
         String message = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
 
-        String senderFormat = plugin.configuration().getString(
+        String senderFormat = plugin.messages().getString(
                 "private-chat.format-sender",
                 "&7[&aВы &8→ &f%target_name%&7] &f%message%"
         );
-        String receiverFormat = plugin.configuration().getString(
+        String receiverFormat = plugin.messages().getString(
                 "private-chat.format-receiver",
                 "&7[&f%player_name% &8→ &aВам&7] &f%message%"
         );

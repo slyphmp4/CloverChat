@@ -144,14 +144,14 @@ public final class HeadMessageService {
     }
 
     private String buildRendered(Player player, String message, int comboCount) {
-        String format = plugin.configuration().getString("chat-above-head.format", "&#8fe8ff%message%");
+        String format = plugin.messages().getString("chat-above-head.format", "&#8fe8ff%message%");
         String rendered = format
                 .replace("%message%", message)
                 .replace("%player_name%", player.getName());
 
         if (plugin.configuration().getBoolean("chat-above-head.combo-enabled", true) && comboCount > 1) {
             int comboExtra = comboCount - 1;
-            String comboFormat = plugin.configuration().getString("chat-above-head.combo-format", " &#9fff9f(+%combo%)");
+            String comboFormat = plugin.messages().getString("chat-above-head.combo-format", " &#9fff9f(+%combo%)");
             String suffix = comboFormat
                     .replace("%combo%", String.valueOf(comboExtra))
                     .replace("%combo_total%", String.valueOf(comboCount));

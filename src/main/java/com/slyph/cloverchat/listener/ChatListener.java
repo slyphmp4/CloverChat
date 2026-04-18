@@ -53,7 +53,7 @@ public final class ChatListener implements Listener {
         }
 
         if (!sender.hasPermission("cloverchat.chat.use")) {
-            List<String> noPermissionLines = plugin.configuration().getStringList("no-chat-permission-message");
+            List<String> noPermissionLines = plugin.messages().getStringList("no-chat-permission-message");
             if (noPermissionLines.isEmpty()) {
                 noPermissionLines = Arrays.asList("&7", "&cУ вас нет права писать в чат", "&7");
             }
@@ -80,7 +80,7 @@ public final class ChatListener implements Listener {
         String playerToken = "__cloverchat_player_name__";
         String prefixToken = "__cloverchat_prefix__";
         String reputationToken = "__cloverchat_reputation__";
-        String format = plugin.configuration().getString(
+        String format = plugin.messages().getString(
                 isGlobal ? "global-chat.format" : "local-chat.format",
                 isGlobal ? "&7[&6G&7] &f%player_name% &8» &f%message%" : "&7[&aL&7] &f%player_name% &8» &f%message%"
         );
@@ -206,7 +206,7 @@ public final class ChatListener implements Listener {
         String shownName = displayName == null || displayName.isBlank() ? senderName : displayName;
         Component nameComponent = plugin.deserializeColored(shownName);
 
-        List<String> hoverLines = plugin.configuration().getStringList("hover-text");
+        List<String> hoverLines = plugin.hovers().getStringList("hover-text");
         if (hoverLines.isEmpty()) {
             return nameComponent;
         }
@@ -331,7 +331,7 @@ public final class ChatListener implements Listener {
             return reputationComponent;
         }
 
-        List<String> hoverLines = plugin.configuration().getStringList("reputation-hover.lines");
+        List<String> hoverLines = plugin.hovers().getStringList("reputation-hover.lines");
         if (!hoverLines.isEmpty()) {
             List<String> replaced = new ArrayList<>();
             for (String line : hoverLines) {
@@ -357,7 +357,7 @@ public final class ChatListener implements Listener {
             return List.of();
         }
 
-        ConfigurationSection rulesSection = plugin.configuration().getConfigurationSection("prefix-hover.rules");
+        ConfigurationSection rulesSection = plugin.hovers().getConfigurationSection("prefix-hover.rules");
         if (rulesSection != null) {
             List<ConfigurationSection> rules = new ArrayList<>();
             for (String ruleKey : rulesSection.getKeys(false)) {
@@ -380,12 +380,12 @@ public final class ChatListener implements Listener {
             }
         }
 
-        List<String> defaultLines = plugin.configuration().getStringList("prefix-hover.default-lines");
+        List<String> defaultLines = plugin.hovers().getStringList("prefix-hover.default-lines");
         if (!defaultLines.isEmpty()) {
             return defaultLines;
         }
 
-        return plugin.configuration().getStringList("prefix-hover-text");
+        return plugin.hovers().getStringList("prefix-hover-text");
     }
 
     private boolean matchesPrefixRule(ConfigurationSection rule, Player sender, String prefixText, String group) {
@@ -556,13 +556,13 @@ public final class ChatListener implements Listener {
                 result = result.append(plugin.deserializeColored(beforeLink));
             }
 
-            String linkFormat = plugin.configuration().getString("links.format", "&e*ссылка*");
+            String linkFormat = plugin.messages().getString("links.format", "&e*ссылка*");
             Component linkComponent = plugin.deserializeColored(linkFormat)
                     .clickEvent(ClickEvent.openUrl(url));
 
-            List<String> hoverLines = plugin.configuration().getStringList("links.hover-lines");
+            List<String> hoverLines = plugin.hovers().getStringList("links.hover-lines");
             if (hoverLines.isEmpty()) {
-                hoverLines = plugin.configuration().getStringList("links.hover");
+                hoverLines = plugin.hovers().getStringList("links.hover");
             }
 
             if (!hoverLines.isEmpty()) {
@@ -587,7 +587,7 @@ public final class ChatListener implements Listener {
 
     private MentionResult processMentions(String text) {
         Matcher matcher = MENTION_PATTERN.matcher(text);
-        String mentionFormat = plugin.configuration().getString("mention.highlight-format", "&6@%mention%");
+        String mentionFormat = plugin.messages().getString("mention.highlight-format", "&6@%mention%");
         Set<Player> mentionedPlayers = new LinkedHashSet<>();
         StringBuffer result = new StringBuffer();
 

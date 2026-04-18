@@ -1,0 +1,77 @@
+hover-text:
+  - "&#ff5e0d[✉] &#ffc8a8Нажмите, чтобы"
+  - "&#ffc8a8написать в личные сообщения"
+
+reputation-hover:
+  lines:
+    - "&#2EFF54 🧪 — &lРепутация"
+    - "&7"
+    - "&#ACE3B2 ▪ На сервере есть система репутации, которая помогает увидеть "
+    - "&#ACE3B2   рейтинг игрока, тем самым оценивая качество коммуникаци"
+    - "&#ACE3B2   игрока на сервере"
+    - "&7"
+    - "&#73FF86 ♠ Текущий счет: %cloverrep_reputation%"
+    - "&7"
+    - "&#E0E0E0 ✎ Нажмите, чтобы оценить игрока"
+
+quick-pm:
+  hover-lines:
+    - "&7"
+    - "&#3FF2D6✉ Быстрое ЛС"
+    - "&#BDFEF3Получатель: &#7DFDEA%target_name%"
+    - "&7"
+    - "&#D9FFF8Клик: вставить /m %target_name%"
+
+prefix-hover:
+  default-lines:
+    - "&7"
+  rules:
+    admin:
+      priority: 300
+      match-type: permission-any
+      permissions:
+        - "cloverchat.rank.admin"
+        - "ultrapermissions.group.admin"
+      lines:
+        - "&#FF2E2E ⚑ — &lАдмин"
+        - "&7"
+        - "&#E3ACAC ▪ Данный игрок является администратором сервера,"
+        - "&#E3ACAC   который управляет большинством систем на сервере, тем самым"
+        - "&#E3ACAC   помогает игрокам разбираться возникшими проблемами в игре"
+        - "&7"
+        - "&#E0E0E0 ✉ Нажмите на ник игрока, чтобы написать ему в ЛС"
+    moderator:
+      priority: 200
+      match-type: permission-any
+      permissions:
+        - "cloverchat.rank.moderator"
+        - "ultrapermissions.group.moderator"
+      lines:
+        - "&#2EFFF5 ☁ — Модератор "
+        - "&7"
+        - "&#ACE3DB ▪ Этот значок обозначает то, что данный игрок "
+        - "&#ACE3DB   является модератором сервера, который по большенству своему "
+        - "&#ACE3DB   всегда решает и рассматривает жалобы, и проблемы игроков, "
+        - "&7"
+        - "&#E0E0E0 ✉ Нажмите на ник игрока, чтобы написать ему в ЛС "
+    default:
+      priority: 100
+      match-type: permission-any
+      permissions:
+        - "cloverchat.rank.default"
+        - "ultrapermissions.group.default"
+      lines:
+        - "&#9DA8A8 ♪ — Игрок"
+        - "&7"
+        - "&#C2C2C2 ▪ Этот значок обозначает то, что данный игрок"
+        - "&#C2C2C2   купил проходку на сервер и играет на нем"
+        - "&7"
+        - "&#E0E0E0 ✉ Нажмите на ник игрока, чтобы написать ему в ЛС"
+
+prefix-hover-text: []
+
+links:
+  hover-lines:
+    - "&7URL: &f%url%"
+    - "&7Нажмите, чтобы перейти"
+  hover: []

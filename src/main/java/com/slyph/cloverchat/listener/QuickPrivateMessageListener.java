@@ -55,7 +55,7 @@ public final class QuickPrivateMessageListener implements Listener {
             suggestCommand = "/m " + target.getName() + " ";
         }
 
-        List<String> messageLines = plugin.configuration().getStringList("quick-pm.message-lines");
+        List<String> messageLines = plugin.messages().getStringList("quick-pm.message-lines");
         if (messageLines.isEmpty()) {
             messageLines = Arrays.asList(
                     "&7",
@@ -64,7 +64,7 @@ public final class QuickPrivateMessageListener implements Listener {
             );
         }
 
-        List<String> hoverLines = plugin.configuration().getStringList("quick-pm.hover-lines");
+        List<String> hoverLines = plugin.hovers().getStringList("quick-pm.hover-lines");
         Component hoverComponent = null;
         if (!hoverLines.isEmpty()) {
             List<String> resolvedHoverLines = new ArrayList<>();
