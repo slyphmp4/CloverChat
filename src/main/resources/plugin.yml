@@ -1,34 +1,37 @@
 name: CloverChat
-version: 1.5
-main: com.fread.CloverChat.CloverChat
+version: ${version}
+main: com.slyph.cloverchat.CloverChatPlugin
 api-version: 1.16
-author: fread
-depend: [PlaceholderAPI, ProtocolLib]
-description: Настраиваемый чат
+authors: [slyph]
+softdepend: [PlaceholderAPI]
+description: Настраиваемый чат для сервера
 
 commands:
   m:
     description: Отправить личное сообщение
-    usage: /m <ник_игрока> <сообщение>
+    usage: /m <ник> <сообщение>
     permission: cloverchat.pm
-    permission-message: "&cУ вас нет прав на использование этой команды!"
-
   cloverchatreload:
     description: Перезагрузить CloverChat
-    usage: /cloverchatreload
+    usage: /cloverchatreload confirm
     permission: cloverchat.command.reload
-    permission-message: "&cУ вас нет прав на использование этой команды!"
 
 permissions:
   cloverchat.chat.use:
-    description: "Позволяет игроку писать в чат"
+    description: Разрешает писать в чат
     default: true
-  cloverchat.commandcooldown.bypass:
-    description: "Позволяет обходить общий кулдаун на ввод команд"
-    default: op
   cloverchat.pm:
-    description: "Позволяет использовать личные сообщения /m"
+    description: Разрешает использовать команду /m
     default: true
+  cloverchat.pm.quick:
+    description: Разрешает быстрое ЛС по ПКМ на игрока
+    default: true
+  cloverchat.pm.bypass.cooldown:
+    description: Обходит кулдаун личных сообщений
+    default: op
   cloverchat.command.reload:
-    description: "Позволяет перезагружать плагин CloverChat"
+    description: Разрешает перезагружать плагин
+    default: op
+  cloverchat.commandcooldown.bypass:
+    description: Обходит общий кулдаун команд
     default: op
