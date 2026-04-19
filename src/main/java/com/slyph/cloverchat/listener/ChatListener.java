@@ -21,15 +21,20 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 public final class ChatListener implements Listener {
 
     private static final Pattern LINK_PATTERN = Pattern.compile("(https?://\\S+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern MENTION_PATTERN = Pattern.compile("@([A-Za-z0-9_]{3,16})");
+    private static final AtomicLong MESSAGE_COUNTER = new AtomicLong(0L);
 
     private final CloverChatPlugin plugin;
 
@@ -76,6 +81,8 @@ public final class ChatListener implements Listener {
         chatMessage = censorMessage(chatMessage);
         MentionResult mentionResult = processMentions(chatMessage);
         chatMessage = mentionResult.formatted;
+        String messageTime = buildMessageTime();
+        String messageId = buildMessageId();
 
         String playerToken = "__cloverchat_player_name__";
         String prefixToken = "__cloverchat_prefix__";
@@ -114,7 +121,9 @@ public final class ChatListener implements Listener {
                 resolvedDisplayName,
                 resolvedReputation,
                 chatMessage,
-                isGlobal
+                isGlobal,
+                messageTime,
+                messageId
         );
         dispatchMessage(sender, isGlobal, finalMessage);
         plugin.headMessageService().show(sender, chatMessage);
@@ -154,7 +163,9 @@ public final class ChatListener implements Listener {
             String resolvedDisplayName,
             String resolvedReputation,
             String messageText,
-            boolean isGlobal
+            boolean isGlobal,
+            String messageTime,
+            String messageId
     ) {
         Component result = Component.empty();
         int currentIndex = 0;
@@ -204,7 +215,7 @@ public final class ChatListener implements Listener {
                 result = result.append(buildReputationComponent(sender, resolvedReputation));
                 currentIndex = tokenStart + reputationToken.length();
             } else {
-                result = result.append(buildChatMessageComponent(sender, messageText, isGlobal));
+                result = result.append(buildChatMessageComponent(sender, messageText, isGlobal, messageTime, messageId));
                 currentIndex = tokenStart + messageToken.length();
             }
         }
@@ -216,7 +227,7 @@ public final class ChatListener implements Listener {
         return result;
     }
 
-    private Component buildChatMessageComponent(Player sender, String messageText, boolean isGlobal) {
+    private Component buildChatMessageComponent(Player sender, String messageText, boolean isGlobal, String messageTime, String messageId) {
         String resolvedMessage = plugin.applyPlaceholders(sender, messageText == null ? "" : messageText);
         Component messageComponent = parseLinksWithColoredText(resolvedMessage);
 
@@ -240,12 +251,20 @@ public final class ChatListener implements Listener {
                     .replace("%player_name%", sender.getName())
                     .replace("%chat_type%", chatType)
                     .replace("%message%", resolvedMessage)
-                    .replace("%message_plain%", plainMessage);
+                    .replace("%message_plain%", plainMessage)
+                    .replace("%message_time%", messageTime)
+                    .replace("%message_id%", messageId);
             replaced.add(plugin.applyPlaceholders(sender, resolved));
         }
 
         String hoverText = String.join("\n", replaced);
-        return messageComponent.hoverEvent(HoverEvent.showText(plugin.deserializeColored(hoverText)));
+        messageComponent = messageComponent.hoverEvent(HoverEvent.showText(plugin.deserializeColored(hoverText)));
+
+        if (plugin.configuration().getBoolean("message-hover.copy-id-on-click", true)) {
+            messageComponent = messageComponent.clickEvent(ClickEvent.copyToClipboard(messageId));
+        }
+
+        return messageComponent;
     }
 
     private Component buildPlayerNameComponent(Player sender, String displayName) {
@@ -564,6 +583,23 @@ public final class ChatListener implements Listener {
             return colored;
         }
         return stripped;
+    }
+
+    private String buildMessageTime() {
+        String pattern = plugin.configuration().getString("message-hover.time-format", "HH:mm:ss");
+        DateTimeFormatter formatter;
+        try {
+            formatter = DateTimeFormatter.ofPattern(pattern);
+        } catch (Exception ignored) {
+            formatter = DateTimeFormatter.ofPattern("HH:mm:ss");
+        }
+        return LocalDateTime.now().format(formatter);
+    }
+
+    private String buildMessageId() {
+        String timePart = Long.toString(System.currentTimeMillis(), 36).toUpperCase(Locale.ROOT);
+        String counterPart = Long.toString(MESSAGE_COUNTER.incrementAndGet(), 36).toUpperCase(Locale.ROOT);
+        return timePart + "-" + counterPart;
     }
 
     private String resolveUltraPermissionsGroup(Player sender) {

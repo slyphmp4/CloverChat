@@ -77,6 +77,10 @@ message-hover:
     - "&#CBFFF7Автор: &#90FFE7%player_name%"
     - "&#CBFFF7Канал: &#90FFE7%chat_type%"
     - "&#CBFFF7Текст: &#90FFE7%message_plain%"
+    - "&#CBFFF7Время: &#90FFE7%message_time%"
+    - "&7"
+    - "&#CBFFF7ID: &#90FFE7%message_id%"
+    - "&#A5A5A5Нажмите, чтобы скопировать ID"
     - "&7"
 
 links:
