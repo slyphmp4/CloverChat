@@ -47,6 +47,8 @@ prefix-hover:
 
 message-hover:
   enabled: true
+  copy-id-on-click: true
+  time-format: "HH:mm:ss"
 
 links:
   enabled: true
