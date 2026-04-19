@@ -9,6 +9,7 @@ import com.slyph.cloverchat.feature.updatechecker.UpdateCheckerService;
 import com.slyph.cloverchat.listener.ChatListener;
 import com.slyph.cloverchat.listener.CommandCooldownListener;
 import com.slyph.cloverchat.listener.JoinQuitListener;
+import com.slyph.cloverchat.listener.ModernChatBridge;
 import com.slyph.cloverchat.listener.QuickPrivateMessageListener;
 import com.slyph.cloverchat.util.ColorUtil;
 import me.clip.placeholderapi.PlaceholderAPI;
@@ -35,6 +36,7 @@ public final class CloverChatPlugin extends JavaPlugin {
     private UpdateCheckerService updateCheckerService;
     private FileConfiguration messagesConfiguration;
     private FileConfiguration hoversConfiguration;
+    private boolean modernChatBridgeEnabled;
 
     @Override
     public void onEnable() {
@@ -44,7 +46,11 @@ public final class CloverChatPlugin extends JavaPlugin {
         headMessageService = new HeadMessageService(this);
         updateCheckerService = new UpdateCheckerService(this);
 
-        getServer().getPluginManager().registerEvents(new ChatListener(this), this);
+        ChatListener chatListener = new ChatListener(this);
+        modernChatBridgeEnabled = new ModernChatBridge(this, chatListener).register();
+        if (!modernChatBridgeEnabled) {
+            getServer().getPluginManager().registerEvents(chatListener, this);
+        }
         getServer().getPluginManager().registerEvents(new JoinQuitListener(this), this);
         getServer().getPluginManager().registerEvents(new CommandCooldownListener(this), this);
         getServer().getPluginManager().registerEvents(new QuickPrivateMessageListener(this), this);
@@ -159,6 +165,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         getLogger().info(boxLine("Автор: slyphmp4"));
         getLogger().info(LOG_SEPARATOR);
         getLogger().info(boxLine("Версия: " + version));
+        getLogger().info(boxLine("Чат режим: " + (modernChatBridgeEnabled ? "AsyncChatEvent (1.19+)" : "AsyncPlayerChatEvent")));
         getLogger().info(boxLine("PlaceholderAPI: " + placeholderApiStatus));
         getLogger().info(boxLine("Проверка обновлений: " + updateCheckerStatus));
         getLogger().info(boxLine("Конфиги: config.yml | messages.yml | hovers.yml"));

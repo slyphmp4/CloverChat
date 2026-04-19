@@ -44,10 +44,11 @@ public final class ChatListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlayerChat(AsyncPlayerChatEvent event) {
-        UUID senderId = event.getPlayer().getUniqueId();
-        String originalMessage = event.getMessage();
         event.setCancelled(true);
+        handleIncomingChat(event.getPlayer().getUniqueId(), event.getMessage());
+    }
 
+    public void handleIncomingChat(UUID senderId, String originalMessage) {
         Bukkit.getScheduler().runTask(plugin, () -> handleChat(senderId, originalMessage));
     }
 
