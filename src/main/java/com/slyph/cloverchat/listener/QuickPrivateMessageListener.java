@@ -32,9 +32,10 @@ public final class QuickPrivateMessageListener implements Listener {
             return;
         }
 
-        if (!(event.getRightClicked() instanceof Player target)) {
+        if (!(event.getRightClicked() instanceof Player)) {
             return;
         }
+        Player target = (Player) event.getRightClicked();
 
         Player player = event.getPlayer();
         if (player.getUniqueId().equals(target.getUniqueId())) {

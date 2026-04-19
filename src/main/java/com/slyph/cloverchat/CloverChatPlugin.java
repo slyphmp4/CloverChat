@@ -156,7 +156,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         getLogger().info("");
         getLogger().info(LOG_TOP);
         getLogger().info(boxLine("CloverChat"));
-        getLogger().info(boxLine("Автор: slyph / slyphmp4"));
+        getLogger().info(boxLine("Автор: slyphmp4"));
         getLogger().info(LOG_SEPARATOR);
         getLogger().info(boxLine("Версия: " + version));
         getLogger().info(boxLine("PlaceholderAPI: " + placeholderApiStatus));
