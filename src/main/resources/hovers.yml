@@ -72,16 +72,11 @@ prefix-hover-text: []
 
 message-hover:
   lines:
+    - "&#CBFFF7✎ Автор: &#90FFE7%player_name% "
+    - "&#CBFFF7🕓 Время: &#90FFE7%message_time% "
+    - "&#CBFFF7© ID: &#90FFE7%message_id% "
     - "&7"
-    - "&#58FFE5✉ Информация о сообщении"
-    - "&#CBFFF7Автор: &#90FFE7%player_name%"
-    - "&#CBFFF7Канал: &#90FFE7%chat_type%"
-    - "&#CBFFF7Текст: &#90FFE7%message_plain%"
-    - "&#CBFFF7Время: &#90FFE7%message_time%"
-    - "&7"
-    - "&#CBFFF7ID: &#90FFE7%message_id%"
-    - "&#A5A5A5Нажмите, чтобы скопировать ID"
-    - "&7"
+    - "&#A5A5A5→ Нажмите, чтобы скопировать ID "
 
 links:
   hover-lines:
