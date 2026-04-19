@@ -45,6 +45,9 @@ chat-above-head:
 prefix-hover:
   enabled: true
 
+message-hover:
+  enabled: true
+
 links:
   enabled: true
 
