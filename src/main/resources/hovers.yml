@@ -70,6 +70,15 @@ prefix-hover:
 
 prefix-hover-text: []
 
+message-hover:
+  lines:
+    - "&7"
+    - "&#58FFE5✉ Информация о сообщении"
+    - "&#CBFFF7Автор: &#90FFE7%player_name%"
+    - "&#CBFFF7Канал: &#90FFE7%chat_type%"
+    - "&#CBFFF7Текст: &#90FFE7%message_plain%"
+    - "&7"
+
 links:
   hover-lines:
     - "&7URL: &f%url%"

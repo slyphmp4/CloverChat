@@ -80,6 +80,7 @@ public final class ChatListener implements Listener {
         String playerToken = "__cloverchat_player_name__";
         String prefixToken = "__cloverchat_prefix__";
         String reputationToken = "__cloverchat_reputation__";
+        String messageToken = "__cloverchat_message__";
         String format = plugin.messages().getString(
                 isGlobal ? "global-chat.format" : "local-chat.format",
                 isGlobal ? "&7[&6G&7] &f%player_name% &8» &f%message%" : "&7[&aL&7] &f%player_name% &8» &f%message%"
@@ -92,7 +93,7 @@ public final class ChatListener implements Listener {
         format = format.replace("%uperms_prefix%", prefixToken);
         format = replaceReputationPlaceholders(format, reputationToken);
         format = format
-                .replace("%message%", chatMessage);
+                .replace("%message%", messageToken);
 
         format = plugin.applyPlaceholders(sender, format);
         if (resolvedPrefix.isBlank()) {
@@ -108,9 +109,12 @@ public final class ChatListener implements Listener {
                 playerToken,
                 prefixToken,
                 reputationToken,
+                messageToken,
                 resolvedPrefix,
                 resolvedDisplayName,
-                resolvedReputation
+                resolvedReputation,
+                chatMessage,
+                isGlobal
         );
         dispatchMessage(sender, isGlobal, finalMessage);
         plugin.headMessageService().show(sender, chatMessage);
@@ -145,9 +149,12 @@ public final class ChatListener implements Listener {
             String playerToken,
             String prefixToken,
             String reputationToken,
+            String messageToken,
             String resolvedPrefix,
             String resolvedDisplayName,
-            String resolvedReputation
+            String resolvedReputation,
+            String messageText,
+            boolean isGlobal
     ) {
         Component result = Component.empty();
         int currentIndex = 0;
@@ -156,6 +163,7 @@ public final class ChatListener implements Listener {
             int nextPlayerIndex = input.indexOf(playerToken, currentIndex);
             int nextPrefixIndex = input.indexOf(prefixToken, currentIndex);
             int nextReputationIndex = input.indexOf(reputationToken, currentIndex);
+            int nextMessageIndex = input.indexOf(messageToken, currentIndex);
 
             int tokenStart = Integer.MAX_VALUE;
             String tokenType = "";
@@ -171,6 +179,10 @@ public final class ChatListener implements Listener {
             if (nextReputationIndex >= 0 && nextReputationIndex < tokenStart) {
                 tokenStart = nextReputationIndex;
                 tokenType = "reputation";
+            }
+            if (nextMessageIndex >= 0 && nextMessageIndex < tokenStart) {
+                tokenStart = nextMessageIndex;
+                tokenType = "message";
             }
 
             if (tokenType.isEmpty()) {
@@ -188,9 +200,12 @@ public final class ChatListener implements Listener {
             } else if (tokenType.equals("prefix")) {
                 result = result.append(buildPrefixComponent(sender, resolvedPrefix));
                 currentIndex = tokenStart + prefixToken.length();
-            } else {
+            } else if (tokenType.equals("reputation")) {
                 result = result.append(buildReputationComponent(sender, resolvedReputation));
                 currentIndex = tokenStart + reputationToken.length();
+            } else {
+                result = result.append(buildChatMessageComponent(sender, messageText, isGlobal));
+                currentIndex = tokenStart + messageToken.length();
             }
         }
 
@@ -199,6 +214,38 @@ public final class ChatListener implements Listener {
         }
 
         return result;
+    }
+
+    private Component buildChatMessageComponent(Player sender, String messageText, boolean isGlobal) {
+        String resolvedMessage = plugin.applyPlaceholders(sender, messageText == null ? "" : messageText);
+        Component messageComponent = parseLinksWithColoredText(resolvedMessage);
+
+        if (!plugin.configuration().getBoolean("message-hover.enabled", true)) {
+            return messageComponent;
+        }
+
+        List<String> hoverLines = plugin.hovers().getStringList("message-hover.lines");
+        if (hoverLines.isEmpty()) {
+            hoverLines = plugin.hovers().getStringList("message-hover-text");
+        }
+        if (hoverLines.isEmpty()) {
+            return messageComponent;
+        }
+
+        String chatType = isGlobal ? "Глобальный" : "Локальный";
+        String plainMessage = extractPlainText(resolvedMessage);
+        List<String> replaced = new ArrayList<>();
+        for (String line : hoverLines) {
+            String resolved = line
+                    .replace("%player_name%", sender.getName())
+                    .replace("%chat_type%", chatType)
+                    .replace("%message%", resolvedMessage)
+                    .replace("%message_plain%", plainMessage);
+            replaced.add(plugin.applyPlaceholders(sender, resolved));
+        }
+
+        String hoverText = String.join("\n", replaced);
+        return messageComponent.hoverEvent(HoverEvent.showText(plugin.deserializeColored(hoverText)));
     }
 
     private Component buildPlayerNameComponent(Player sender, String displayName) {
@@ -503,6 +550,15 @@ public final class ChatListener implements Listener {
 
     private String extractVisiblePrefix(String prefixText) {
         String colored = plugin.applyColor(prefixText == null ? "" : prefixText);
+        String stripped = ChatColor.stripColor(colored);
+        if (stripped == null) {
+            return colored;
+        }
+        return stripped;
+    }
+
+    private String extractPlainText(String text) {
+        String colored = plugin.applyColor(text == null ? "" : text);
         String stripped = ChatColor.stripColor(colored);
         if (stripped == null) {
             return colored;
