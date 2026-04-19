@@ -128,9 +128,17 @@ public final class CloverChatPlugin extends JavaPlugin {
     }
 
     private void loadAdditionalConfigurations() {
-        saveResource("messages.yml", false);
-        saveResource("hovers.yml", false);
-        messagesConfiguration = YamlConfiguration.loadConfiguration(new File(getDataFolder(), "messages.yml"));
-        hoversConfiguration = YamlConfiguration.loadConfiguration(new File(getDataFolder(), "hovers.yml"));
+        File messagesFile = ensureResourceFile("messages.yml");
+        File hoversFile = ensureResourceFile("hovers.yml");
+        messagesConfiguration = YamlConfiguration.loadConfiguration(messagesFile);
+        hoversConfiguration = YamlConfiguration.loadConfiguration(hoversFile);
+    }
+
+    private File ensureResourceFile(String fileName) {
+        File file = new File(getDataFolder(), fileName);
+        if (!file.exists()) {
+            saveResource(fileName, false);
+        }
+        return file;
     }
 }
