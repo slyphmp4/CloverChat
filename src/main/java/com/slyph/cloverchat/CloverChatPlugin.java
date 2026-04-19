@@ -25,6 +25,11 @@ import java.util.List;
 
 public final class CloverChatPlugin extends JavaPlugin {
 
+    private static final int LOG_BOX_INNER_WIDTH = 58;
+    private static final String LOG_TOP = "╔" + "═".repeat(LOG_BOX_INNER_WIDTH + 2) + "╗";
+    private static final String LOG_SEPARATOR = "╠" + "═".repeat(LOG_BOX_INNER_WIDTH + 2) + "╣";
+    private static final String LOG_BOTTOM = "╚" + "═".repeat(LOG_BOX_INNER_WIDTH + 2) + "╝";
+
     private boolean placeholderApiHooked;
     private HeadMessageService headMessageService;
     private UpdateCheckerService updateCheckerService;
@@ -59,6 +64,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         }
 
         updateCheckerService.start();
+        logStartupBanner();
     }
 
     @Override
@@ -140,5 +146,30 @@ public final class CloverChatPlugin extends JavaPlugin {
             saveResource(fileName, false);
         }
         return file;
+    }
+
+    private void logStartupBanner() {
+        String version = getDescription().getVersion();
+        String placeholderApiStatus = placeholderApiHooked ? "Подключен" : "Не найден";
+        String updateCheckerStatus = configuration().getBoolean("update-checker.enabled", true) ? "Включена" : "Выключена";
+
+        getLogger().info("");
+        getLogger().info(LOG_TOP);
+        getLogger().info(boxLine("CloverChat"));
+        getLogger().info(boxLine("Автор: slyph / slyphmp4"));
+        getLogger().info(LOG_SEPARATOR);
+        getLogger().info(boxLine("Версия: " + version));
+        getLogger().info(boxLine("PlaceholderAPI: " + placeholderApiStatus));
+        getLogger().info(boxLine("Проверка обновлений: " + updateCheckerStatus));
+        getLogger().info(boxLine("Конфиги: config.yml | messages.yml | hovers.yml"));
+        getLogger().info(LOG_BOTTOM);
+        getLogger().info("");
+    }
+
+    private String boxLine(String text) {
+        String raw = text == null ? "" : text;
+        String normalized = raw.length() > LOG_BOX_INNER_WIDTH ? raw.substring(0, LOG_BOX_INNER_WIDTH) : raw;
+        String padding = " ".repeat(Math.max(0, LOG_BOX_INNER_WIDTH - normalized.length()));
+        return "║ " + normalized + padding + " ║";
     }
 }
