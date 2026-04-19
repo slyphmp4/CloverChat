@@ -26,7 +26,7 @@ public final class PrivateMessageCommand implements CommandExecutor {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!(sender instanceof Player player)) {
+        if (!(sender instanceof Player)) {
             List<String> nonPlayerLines = plugin.messages().getStringList("private-chat.non-player-message");
             if (nonPlayerLines.isEmpty()) {
                 nonPlayerLines = Arrays.asList("&7", "&cЭта команда доступна только игрокам", "&7");
@@ -34,6 +34,7 @@ public final class PrivateMessageCommand implements CommandExecutor {
             plugin.sendConfiguredLines(sender, null, nonPlayerLines);
             return true;
         }
+        Player player = (Player) sender;
 
         if (!player.hasPermission("cloverchat.pm")) {
             List<String> noPermissionLines = plugin.messages().getStringList("private-chat.no-permission-message");

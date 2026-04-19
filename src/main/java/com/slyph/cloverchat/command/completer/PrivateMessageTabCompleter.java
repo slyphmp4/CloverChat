@@ -22,9 +22,10 @@ public final class PrivateMessageTabCompleter implements TabCompleter {
         if (args.length == 1) {
             String input = args[0].toLowerCase(Locale.ROOT);
             List<String> suggestions = new ArrayList<>();
+            Player senderPlayer = sender instanceof Player ? (Player) sender : null;
 
             for (Player player : Bukkit.getOnlinePlayers()) {
-                if (sender instanceof Player senderPlayer && !senderPlayer.canSee(player)) {
+                if (senderPlayer != null && !senderPlayer.canSee(player)) {
                     continue;
                 }
                 String name = player.getName();
