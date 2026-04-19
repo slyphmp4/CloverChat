@@ -1,0 +1,79 @@
+﻿hover-text:
+  - "&#ff5e0d[✉] &#ffc8a8Натисніть, щоб"
+  - "&#ffc8a8написати в приватні повідомлення"
+
+reputation-hover:
+  lines:
+    - "&#2EFF54 🧪 — &lРепутація"
+    - "&7"
+    - "&#ACE3B2 ▪ Система репутації допомагає оцінити"
+    - "&#ACE3B2   поведінку та комунікацію гравця"
+    - "&7"
+    - "&#73FF86 ♠ Поточний рахунок: %cloverrep_reputation%"
+    - "&7"
+    - "&#E0E0E0 ✎ Натисніть, щоб оцінити гравця"
+
+quick-pm:
+  hover-lines:
+    - "&7"
+    - "&#3FF2D6✉ Швидке ПП"
+    - "&#BDFEF3Отримувач: &#7DFDEA%target_name%"
+    - "&7"
+    - "&#D9FFF8Клік: вставити /m %target_name%"
+
+prefix-hover:
+  default-lines:
+    - "&7"
+  rules:
+    admin:
+      priority: 300
+      match-type: permission-any
+      permissions:
+        - "cloverchat.rank.admin"
+        - "ultrapermissions.group.admin"
+      lines:
+        - "&#FF2E2E ⚑ — &lАдмін"
+        - "&7"
+        - "&#E3ACAC ▪ Цей гравець є адміністратором сервера"
+        - "&7"
+        - "&#E0E0E0 ✉ Натисніть на нік, щоб написати ПП"
+    moderator:
+      priority: 200
+      match-type: permission-any
+      permissions:
+        - "cloverchat.rank.moderator"
+        - "ultrapermissions.group.moderator"
+      lines:
+        - "&#2EFFF5 ☁ — Модератор"
+        - "&7"
+        - "&#ACE3DB ▪ Цей гравець є модератором сервера"
+        - "&7"
+        - "&#E0E0E0 ✉ Натисніть на нік, щоб написати ПП"
+    default:
+      priority: 100
+      match-type: permission-any
+      permissions:
+        - "cloverchat.rank.default"
+        - "ultrapermissions.group.default"
+      lines:
+        - "&#9DA8A8 ♪ — Гравець"
+        - "&7"
+        - "&#C2C2C2 ▪ Звичайний гравець сервера"
+        - "&7"
+        - "&#E0E0E0 ✉ Натисніть на нік, щоб написати ПП"
+
+prefix-hover-text: []
+
+message-hover:
+  lines:
+    - "&#CBFFF7✎ Автор: &#90FFE7%player_name% "
+    - "&#CBFFF7🕓 Час: &#90FFE7%message_time% "
+    - "&#CBFFF7© ID: &#90FFE7%message_id% "
+    - "&7"
+    - "&#A5A5A5→ Натисніть, щоб скопіювати ID "
+
+links:
+  hover-lines:
+    - "&7URL: &f%url%"
+    - "&7Натисніть, щоб відкрити"
+  hover: []

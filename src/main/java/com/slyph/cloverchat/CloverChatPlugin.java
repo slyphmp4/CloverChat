@@ -22,7 +22,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 public final class CloverChatPlugin extends JavaPlugin {
 
@@ -30,6 +32,8 @@ public final class CloverChatPlugin extends JavaPlugin {
     private static final String LOG_TOP = "╔" + "═".repeat(LOG_BOX_INNER_WIDTH + 2) + "╗";
     private static final String LOG_SEPARATOR = "╠" + "═".repeat(LOG_BOX_INNER_WIDTH + 2) + "╣";
     private static final String LOG_BOTTOM = "╚" + "═".repeat(LOG_BOX_INNER_WIDTH + 2) + "╝";
+    private static final List<String> SUPPORTED_LANGUAGES = Arrays.asList("ru", "ua", "en", "de");
+    private static final String DEFAULT_LANGUAGE = "ru";
 
     private boolean placeholderApiHooked;
     private HeadMessageService headMessageService;
@@ -37,6 +41,7 @@ public final class CloverChatPlugin extends JavaPlugin {
     private FileConfiguration messagesConfiguration;
     private FileConfiguration hoversConfiguration;
     private boolean modernChatBridgeEnabled;
+    private String activeLanguage = DEFAULT_LANGUAGE;
 
     @Override
     public void onEnable() {
@@ -99,6 +104,10 @@ public final class CloverChatPlugin extends JavaPlugin {
         return placeholderApiHooked;
     }
 
+    public String activeLanguage() {
+        return activeLanguage;
+    }
+
     public HeadMessageService headMessageService() {
         return headMessageService;
     }
@@ -140,18 +149,63 @@ public final class CloverChatPlugin extends JavaPlugin {
     }
 
     private void loadAdditionalConfigurations() {
-        File messagesFile = ensureResourceFile("messages.yml");
-        File hoversFile = ensureResourceFile("hovers.yml");
+        migrateLegacyLanguageFiles();
+        String requestedLanguage = normalizeLanguage(configuration().getString("language", DEFAULT_LANGUAGE));
+        if (!SUPPORTED_LANGUAGES.contains(requestedLanguage)) {
+            requestedLanguage = DEFAULT_LANGUAGE;
+        }
+        activeLanguage = requestedLanguage;
+
+        ensureLanguageResources(DEFAULT_LANGUAGE);
+        ensureLanguageResources(activeLanguage);
+
+        File messagesFile = ensureLanguageResourceFile(activeLanguage, "messages.yml");
+        File hoversFile = ensureLanguageResourceFile(activeLanguage, "hovers.yml");
         messagesConfiguration = YamlConfiguration.loadConfiguration(messagesFile);
         hoversConfiguration = YamlConfiguration.loadConfiguration(hoversFile);
     }
 
-    private File ensureResourceFile(String fileName) {
-        File file = new File(getDataFolder(), fileName);
+    private void ensureLanguageResources(String language) {
+        ensureLanguageResourceFile(language, "messages.yml");
+        ensureLanguageResourceFile(language, "hovers.yml");
+    }
+
+    private File ensureLanguageResourceFile(String language, String fileName) {
+        File file = new File(new File(getDataFolder(), "langs" + File.separator + language), fileName);
         if (!file.exists()) {
-            saveResource(fileName, false);
+            saveResource("langs/" + language + "/" + fileName, false);
         }
         return file;
+    }
+
+    private void migrateLegacyLanguageFiles() {
+        File legacyMessages = new File(getDataFolder(), "messages.yml");
+        File legacyHovers = new File(getDataFolder(), "hovers.yml");
+        File ruDir = new File(getDataFolder(), "langs" + File.separator + DEFAULT_LANGUAGE);
+        if (!ruDir.exists()) {
+            ruDir.mkdirs();
+        }
+
+        File ruMessages = new File(ruDir, "messages.yml");
+        File ruHovers = new File(ruDir, "hovers.yml");
+
+        if (legacyMessages.exists() && !ruMessages.exists()) {
+            legacyMessages.renameTo(ruMessages);
+        }
+        if (legacyHovers.exists() && !ruHovers.exists()) {
+            legacyHovers.renameTo(ruHovers);
+        }
+    }
+
+    private String normalizeLanguage(String input) {
+        if (input == null) {
+            return DEFAULT_LANGUAGE;
+        }
+        String normalized = input.trim().toLowerCase(Locale.ROOT);
+        if (normalized.isEmpty()) {
+            return DEFAULT_LANGUAGE;
+        }
+        return normalized;
     }
 
     private void logStartupBanner() {
@@ -165,10 +219,11 @@ public final class CloverChatPlugin extends JavaPlugin {
         getLogger().info(boxLine("Автор: slyphmp4"));
         getLogger().info(LOG_SEPARATOR);
         getLogger().info(boxLine("Версия: " + version));
+        getLogger().info(boxLine("Язык: " + activeLanguage));
         getLogger().info(boxLine("Чат режим: " + (modernChatBridgeEnabled ? "AsyncChatEvent (1.19+)" : "AsyncPlayerChatEvent")));
         getLogger().info(boxLine("PlaceholderAPI: " + placeholderApiStatus));
         getLogger().info(boxLine("Проверка обновлений: " + updateCheckerStatus));
-        getLogger().info(boxLine("Конфиги: config.yml | messages.yml | hovers.yml"));
+        getLogger().info(boxLine("Конфиги: config.yml | langs/" + activeLanguage + "/"));
         getLogger().info(LOG_BOTTOM);
         getLogger().info("");
     }

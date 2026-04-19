@@ -1,0 +1,86 @@
+﻿local-chat:
+  format: "&#20a688[&#40e7afʟ&#20a688] &#c0ffec• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#4f5b58→ &#d6fff7%message%"
+
+global-chat:
+  format: "&#4ea62f[&#6de743ɢ&#4ea62f] &#d0ffc0• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#525b4f→ &#e0ffd6%message%"
+
+private-chat:
+  format-sender: "&#c18c22[&#ffbb32✉&#c18c22] &#ffecc6• &#ffc653&lВи &#69645b» &#ffc653%target_name% &#5b574f→ &#fff2d9%message%"
+  format-receiver: "&#c18c22[&#ffbb32✉&#c18c22] &#ffecc6• &#ffc653&l%player_name% &#69645b» &#ffc653Вам &#5b574f→ &#fff2d9%message%"
+  usage-message:
+    - "&7"
+    - "&#24e765★ ПП  &#89ffa6|  &#24e765/m <нік_гравця> <повідомлення>"
+    - "&7"
+  offline-player-message:
+    - "&7"
+    - "&#c72b2b❌ Помилка  &#ff9089|  &#ff5a5aГравець &#ff4d4d&l%target_name% &#ff5a5aне в мережі"
+    - "&7"
+  cooldown-message:
+    - "&7"
+    - "&#c72b2b❌ Помилка  &#ff9089|  &#ff5a5aЗачекайте &#ff4d4d&l%remain% &#ff5a5aсекунд перед відправкою ПП"
+    - "&7"
+  disabled-message:
+    - "&7"
+    - "&#c72b2b❌ Помилка  &#ff9089|  &#ff5a5aПриватні повідомлення вимкнені"
+    - "&7"
+  no-permission-message:
+    - "&7"
+    - "&#c72b2b❌ Помилка  &#ff9089|  &#ff5a5aУ вас немає прав на приватні повідомлення"
+    - "&7"
+  non-player-message:
+    - "&7"
+    - "&#c72b2b❌ Помилка  &#ff9089|  &#ff5a5aЦя команда доступна лише гравцям"
+    - "&7"
+
+quick-pm:
+  message-lines:
+    - "&7"
+    - "&#24e765★ ПП  &#89ffa6|  &#24e765Натисніть, щоб написати &#b2ffd8%target_name%"
+    - "&7"
+
+mention:
+  highlight-format: "&#ff5e0d&l@%mention%&r"
+
+chat-above-head:
+  format: "&#F4830B🗩 &#FFECD9%message%"
+  combo-format: " &#FFD479(+%combo%)"
+
+links:
+  format: "&#ffcb1b&l*посилання*"
+
+commands-cooldown:
+  message:
+    - "&7"
+    - "&#c72b2b❌ Помилка  &#ff9089|  &#ff5a5aЗачекайте &#ff4d4d&l%remain% &#ff5a5aсекунд перед наступною командою"
+    - "&7"
+
+no-chat-permission-message:
+  - "&7"
+  - "&#c72b2b❌ Помилка  &#ff9089|  &#ff5a5aУ вас немає права писати в чат"
+  - "&7"
+
+join-message:
+  lines:
+    - "&7"
+    - "&#59645c[&#1dff73+&#59645c] &#b0cab9%player_name% зайшов на сервер"
+    - "&7"
+
+leave-message:
+  lines:
+    - "&7"
+    - "&#645959[&#ff4848-&#645959] &#cab0b0%player_name% вийшов із сервера"
+    - "&7"
+
+system-messages:
+  reload-usage:
+    - "&7"
+    - "&#24e765★ Чат  &#89ffa6|  &#24e765Використання: /cloverchatreload confirm"
+    - "&7"
+  reload-no-permission:
+    - "&7"
+    - "&#c72b2b❌ Помилка  &#ff9089|  &#ff5a5aУ вас немає прав на цю команду"
+    - "&7"
+  reload-success:
+    - "&7"
+    - "&#24e765★ Чат  &#89ffa6|  &#24e765Плагін успішно перезавантажено"
+    - "&7"

@@ -1,0 +1,86 @@
+﻿local-chat:
+  format: "&#20a688[&#40e7afʟ&#20a688] &#c0ffec• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#4f5b58→ &#d6fff7%message%"
+
+global-chat:
+  format: "&#4ea62f[&#6de743ɢ&#4ea62f] &#d0ffc0• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#525b4f→ &#e0ffd6%message%"
+
+private-chat:
+  format-sender: "&#c18c22[&#ffbb32✉&#c18c22] &#ffecc6• &#ffc653&lYou &#69645b» &#ffc653%target_name% &#5b574f→ &#fff2d9%message%"
+  format-receiver: "&#c18c22[&#ffbb32✉&#c18c22] &#ffecc6• &#ffc653&l%player_name% &#69645b» &#ffc653To you &#5b574f→ &#fff2d9%message%"
+  usage-message:
+    - "&7"
+    - "&#24e765★ PM  &#89ffa6|  &#24e765/m <player_name> <message>"
+    - "&7"
+  offline-player-message:
+    - "&7"
+    - "&#c72b2b❌ Error  &#ff9089|  &#ff5a5aPlayer &#ff4d4d&l%target_name% &#ff5a5ais offline"
+    - "&7"
+  cooldown-message:
+    - "&7"
+    - "&#c72b2b❌ Error  &#ff9089|  &#ff5a5aPlease wait &#ff4d4d&l%remain% &#ff5a5aseconds before sending PM"
+    - "&7"
+  disabled-message:
+    - "&7"
+    - "&#c72b2b❌ Error  &#ff9089|  &#ff5a5aPrivate messages are disabled"
+    - "&7"
+  no-permission-message:
+    - "&7"
+    - "&#c72b2b❌ Error  &#ff9089|  &#ff5a5aYou do not have permission for private messages"
+    - "&7"
+  non-player-message:
+    - "&7"
+    - "&#c72b2b❌ Error  &#ff9089|  &#ff5a5aThis command is only for players"
+    - "&7"
+
+quick-pm:
+  message-lines:
+    - "&7"
+    - "&#24e765★ PM  &#89ffa6|  &#24e765Click to message &#b2ffd8%target_name%"
+    - "&7"
+
+mention:
+  highlight-format: "&#ff5e0d&l@%mention%&r"
+
+chat-above-head:
+  format: "&#F4830B🗩 &#FFECD9%message%"
+  combo-format: " &#FFD479(+%combo%)"
+
+links:
+  format: "&#ffcb1b&l*link*"
+
+commands-cooldown:
+  message:
+    - "&7"
+    - "&#c72b2b❌ Error  &#ff9089|  &#ff5a5aPlease wait &#ff4d4d&l%remain% &#ff5a5aseconds before next command"
+    - "&7"
+
+no-chat-permission-message:
+  - "&7"
+  - "&#c72b2b❌ Error  &#ff9089|  &#ff5a5aYou do not have permission to chat"
+  - "&7"
+
+join-message:
+  lines:
+    - "&7"
+    - "&#59645c[&#1dff73+&#59645c] &#b0cab9%player_name% joined the server"
+    - "&7"
+
+leave-message:
+  lines:
+    - "&7"
+    - "&#645959[&#ff4848-&#645959] &#cab0b0%player_name% left the server"
+    - "&7"
+
+system-messages:
+  reload-usage:
+    - "&7"
+    - "&#24e765★ Chat  &#89ffa6|  &#24e765Usage: /cloverchatreload confirm"
+    - "&7"
+  reload-no-permission:
+    - "&7"
+    - "&#c72b2b❌ Error  &#ff9089|  &#ff5a5aYou do not have permission for this command"
+    - "&7"
+  reload-success:
+    - "&7"
+    - "&#24e765★ Chat  &#89ffa6|  &#24e765Plugin reloaded successfully"
+    - "&7"

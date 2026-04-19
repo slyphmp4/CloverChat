@@ -1,0 +1,79 @@
+﻿hover-text:
+  - "&#ff5e0d[✉] &#ffc8a8Klicke, um"
+  - "&#ffc8a8eine private Nachricht zu senden"
+
+reputation-hover:
+  lines:
+    - "&#2EFF54 🧪 — &lRuf"
+    - "&7"
+    - "&#ACE3B2 ▪ Das Rufsystem hilft, das Verhalten"
+    - "&#ACE3B2   und die Kommunikation eines Spielers zu bewerten"
+    - "&7"
+    - "&#73FF86 ♠ Aktueller Wert: %cloverrep_reputation%"
+    - "&7"
+    - "&#E0E0E0 ✎ Klicke, um den Spieler zu bewerten"
+
+quick-pm:
+  hover-lines:
+    - "&7"
+    - "&#3FF2D6✉ Schnell-PN"
+    - "&#BDFEF3Empfänger: &#7DFDEA%target_name%"
+    - "&7"
+    - "&#D9FFF8Klick: /m %target_name% einfügen"
+
+prefix-hover:
+  default-lines:
+    - "&7"
+  rules:
+    admin:
+      priority: 300
+      match-type: permission-any
+      permissions:
+        - "cloverchat.rank.admin"
+        - "ultrapermissions.group.admin"
+      lines:
+        - "&#FF2E2E ⚑ — &lAdmin"
+        - "&7"
+        - "&#E3ACAC ▪ Dieser Spieler ist ein Administrator"
+        - "&7"
+        - "&#E0E0E0 ✉ Klicke auf den Namen für PN"
+    moderator:
+      priority: 200
+      match-type: permission-any
+      permissions:
+        - "cloverchat.rank.moderator"
+        - "ultrapermissions.group.moderator"
+      lines:
+        - "&#2EFFF5 ☁ — Moderator"
+        - "&7"
+        - "&#ACE3DB ▪ Dieser Spieler ist ein Moderator"
+        - "&7"
+        - "&#E0E0E0 ✉ Klicke auf den Namen für PN"
+    default:
+      priority: 100
+      match-type: permission-any
+      permissions:
+        - "cloverchat.rank.default"
+        - "ultrapermissions.group.default"
+      lines:
+        - "&#9DA8A8 ♪ — Spieler"
+        - "&7"
+        - "&#C2C2C2 ▪ Normaler Server-Spieler"
+        - "&7"
+        - "&#E0E0E0 ✉ Klicke auf den Namen für PN"
+
+prefix-hover-text: []
+
+message-hover:
+  lines:
+    - "&#CBFFF7✎ Autor: &#90FFE7%player_name% "
+    - "&#CBFFF7🕓 Zeit: &#90FFE7%message_time% "
+    - "&#CBFFF7© ID: &#90FFE7%message_id% "
+    - "&7"
+    - "&#A5A5A5→ Klicke, um die ID zu kopieren "
+
+links:
+  hover-lines:
+    - "&7URL: &f%url%"
+    - "&7Klicken zum Öffnen"
+  hover: []

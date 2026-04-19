@@ -1,5 +1,7 @@
 hex-colors: true
 
+language: "ru"
+
 update-checker:
   enabled: true
 

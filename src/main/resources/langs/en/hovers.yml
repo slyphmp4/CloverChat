@@ -1,0 +1,79 @@
+﻿hover-text:
+  - "&#ff5e0d[✉] &#ffc8a8Click to"
+  - "&#ffc8a8send a private message"
+
+reputation-hover:
+  lines:
+    - "&#2EFF54 🧪 — &lReputation"
+    - "&7"
+    - "&#ACE3B2 ▪ Reputation helps evaluate player behavior"
+    - "&#ACE3B2   and communication quality on the server"
+    - "&7"
+    - "&#73FF86 ♠ Current score: %cloverrep_reputation%"
+    - "&7"
+    - "&#E0E0E0 ✎ Click to rate this player"
+
+quick-pm:
+  hover-lines:
+    - "&7"
+    - "&#3FF2D6✉ Quick PM"
+    - "&#BDFEF3Receiver: &#7DFDEA%target_name%"
+    - "&7"
+    - "&#D9FFF8Click: insert /m %target_name%"
+
+prefix-hover:
+  default-lines:
+    - "&7"
+  rules:
+    admin:
+      priority: 300
+      match-type: permission-any
+      permissions:
+        - "cloverchat.rank.admin"
+        - "ultrapermissions.group.admin"
+      lines:
+        - "&#FF2E2E ⚑ — &lAdmin"
+        - "&7"
+        - "&#E3ACAC ▪ This player is a server administrator"
+        - "&7"
+        - "&#E0E0E0 ✉ Click nickname to send PM"
+    moderator:
+      priority: 200
+      match-type: permission-any
+      permissions:
+        - "cloverchat.rank.moderator"
+        - "ultrapermissions.group.moderator"
+      lines:
+        - "&#2EFFF5 ☁ — Moderator"
+        - "&7"
+        - "&#ACE3DB ▪ This player is a server moderator"
+        - "&7"
+        - "&#E0E0E0 ✉ Click nickname to send PM"
+    default:
+      priority: 100
+      match-type: permission-any
+      permissions:
+        - "cloverchat.rank.default"
+        - "ultrapermissions.group.default"
+      lines:
+        - "&#9DA8A8 ♪ — Player"
+        - "&7"
+        - "&#C2C2C2 ▪ Regular server player"
+        - "&7"
+        - "&#E0E0E0 ✉ Click nickname to send PM"
+
+prefix-hover-text: []
+
+message-hover:
+  lines:
+    - "&#CBFFF7✎ Author: &#90FFE7%player_name% "
+    - "&#CBFFF7🕓 Time: &#90FFE7%message_time% "
+    - "&#CBFFF7© ID: &#90FFE7%message_id% "
+    - "&7"
+    - "&#A5A5A5→ Click to copy message ID "
+
+links:
+  hover-lines:
+    - "&7URL: &f%url%"
+    - "&7Click to open"
+  hover: []
