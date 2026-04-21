@@ -24,6 +24,28 @@ global-chat:
   enabled: true
   prefix: "!"
 
+# Additional channels with custom prefixes.
+# Priority is by longest prefix match.
+# Example:
+#   @hello  -> vip channel
+#   @h      -> another channel
+# Message "@hello text" will go to "vip" because "@hello" is longer.
+group-chat:
+  enabled: false
+  channels:
+    staff:
+      enabled: true
+      prefix: "@s "
+      display-name: "Staff"
+      send-permission: "cloverchat.channel.staff.send"
+      view-permission: "cloverchat.channel.staff.view"
+    vip:
+      enabled: true
+      prefix: "@v "
+      display-name: "VIP"
+      send-permission: "cloverchat.channel.vip.send"
+      view-permission: "cloverchat.channel.vip.view"
+
 private-chat:
   enabled: true
   cooldown-seconds: 5

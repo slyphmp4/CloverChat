@@ -4,6 +4,22 @@
 global-chat:
   format: "&#4ea62f[&#6de743ɢ&#4ea62f] &#d0ffc0• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#525b4f→ &#e0ffd6%message%"
 
+chat-types:
+  local: "Локальний"
+  global: "Глобальний"
+
+group-chat:
+  default-format: "&#9f54ff[&#c986ff%channel%&#9f54ff] &#f4e7ff• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#5b4f66→ &#f7ecff%message%"
+  formats: {}
+  no-permission-message:
+    - "&7"
+    - "&#ff6b6b✖ Помилка  &#ffc1c1|  &#ff8f8fУ вас немає прав писати в канал &#ffb8b8%channel%"
+    - "&7"
+  disabled-message:
+    - "&7"
+    - "&#ff6b6b✖ Помилка  &#ffc1c1|  &#ff8f8fКанал &#ffb8b8%channel% &#ff8f8fвимкнено"
+    - "&7"
+
 private-chat:
   format-sender: "&#c18c22[&#ffbb32✉&#c18c22] &#ffecc6• &#ffc653&lВи &#69645b» &#ffc653%target_name% &#5b574f→ &#fff2d9%message%"
   format-receiver: "&#c18c22[&#ffbb32✉&#c18c22] &#ffecc6• &#ffc653&l%player_name% &#69645b» &#ffc653Вам &#5b574f→ &#fff2d9%message%"
