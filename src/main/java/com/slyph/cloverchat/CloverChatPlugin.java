@@ -6,6 +6,7 @@ import com.slyph.cloverchat.command.completer.PrivateMessageTabCompleter;
 import com.slyph.cloverchat.command.completer.ReloadTabCompleter;
 import com.slyph.cloverchat.feature.automessage.AutoMessageService;
 import com.slyph.cloverchat.feature.headmessage.HeadMessageService;
+import com.slyph.cloverchat.feature.proxysync.VelocityProxyChatService;
 import com.slyph.cloverchat.feature.updatechecker.UpdateCheckerService;
 import com.slyph.cloverchat.listener.ChatListener;
 import com.slyph.cloverchat.listener.CommandCooldownListener;
@@ -40,6 +41,7 @@ public final class CloverChatPlugin extends JavaPlugin {
     private HeadMessageService headMessageService;
     private UpdateCheckerService updateCheckerService;
     private AutoMessageService autoMessageService;
+    private VelocityProxyChatService velocityProxyChatService;
     private FileConfiguration messagesConfiguration;
     private FileConfiguration hoversConfiguration;
     private FileConfiguration autoMessagesConfiguration;
@@ -54,6 +56,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         headMessageService = new HeadMessageService(this);
         updateCheckerService = new UpdateCheckerService(this);
         autoMessageService = new AutoMessageService(this);
+        velocityProxyChatService = new VelocityProxyChatService(this);
 
         ChatListener chatListener = new ChatListener(this);
         modernChatBridgeEnabled = new ModernChatBridge(this, chatListener).register();
@@ -80,6 +83,7 @@ public final class CloverChatPlugin extends JavaPlugin {
 
         updateCheckerService.start();
         autoMessageService.start();
+        velocityProxyChatService.start();
         logStartupBanner();
     }
 
@@ -93,6 +97,9 @@ public final class CloverChatPlugin extends JavaPlugin {
         }
         if (autoMessageService != null) {
             autoMessageService.stop();
+        }
+        if (velocityProxyChatService != null) {
+            velocityProxyChatService.stop();
         }
     }
 
@@ -122,6 +129,10 @@ public final class CloverChatPlugin extends JavaPlugin {
 
     public HeadMessageService headMessageService() {
         return headMessageService;
+    }
+
+    public VelocityProxyChatService proxyChatSyncService() {
+        return velocityProxyChatService;
     }
 
     public String applyColor(String text) {
@@ -160,6 +171,9 @@ public final class CloverChatPlugin extends JavaPlugin {
         }
         if (autoMessageService != null) {
             autoMessageService.restart();
+        }
+        if (velocityProxyChatService != null) {
+            velocityProxyChatService.restart();
         }
     }
 
@@ -238,6 +252,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         String placeholderApiStatus = placeholderApiHooked ? "Подключен" : "Не найден";
         String updateCheckerStatus = configuration().getBoolean("update-checker.enabled", true) ? "Включена" : "Выключена";
         String autoMessagesStatus = autoMessages() != null && autoMessages().getBoolean("enabled", false) ? "Включены" : "Выключены";
+        String proxySyncStatus = configuration().getBoolean("proxy-sync.enabled", false) ? "Включен" : "Выключен";
 
         getLogger().info("");
         getLogger().info(LOG_TOP);
@@ -250,6 +265,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         getLogger().info(boxLine("PlaceholderAPI: " + placeholderApiStatus));
         getLogger().info(boxLine("Проверка обновлений: " + updateCheckerStatus));
         getLogger().info(boxLine("Автосообщения: " + autoMessagesStatus));
+        getLogger().info(boxLine("Proxy Sync (Velocity): " + proxySyncStatus));
         getLogger().info(boxLine("Конфиги: config.yml | auto-messages.yml | langs/" + activeLanguage + "/"));
         getLogger().info(LOG_BOTTOM);
         getLogger().info("");

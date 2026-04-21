@@ -124,6 +124,7 @@ public final class ChatListener implements Listener {
                 messageId
         );
         dispatchMessage(sender, chatRoute, finalMessage);
+        plugin.proxyChatSyncService().forwardMessage(sender, messageId, chatRoute.mode.name(), chatRoute.viewPermission, finalMessage);
         plugin.headMessageService().show(sender, chatMessage);
         playMentionSound(mentionResult.mentionedPlayers);
     }
