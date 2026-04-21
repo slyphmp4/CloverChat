@@ -140,9 +140,11 @@ public final class VelocityProxyChatService implements PluginMessageListener {
             }
 
             Component component = serializer.deserialize(payload.componentJson);
-            component = applyServerTag(payload.sourceServer, component);
-            dispatchIncoming(mode, payload.viewPermission, component);
-            logDebug("Received proxy chat message id=" + payload.messageId + " mode=" + payload.mode + " source=" + payload.sourceServer);
+            Component tagged = applyServerTag(payload.sourceServer, component);
+            plugin.scheduler().runGlobal(() -> {
+                dispatchIncoming(mode, payload.viewPermission, tagged);
+                logDebug("Received proxy chat message id=" + payload.messageId + " mode=" + payload.mode + " source=" + payload.sourceServer);
+            });
         } catch (Exception exception) {
             logDebug("Failed to process proxy-sync message: " + exception.getMessage());
         }

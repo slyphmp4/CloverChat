@@ -1,8 +1,7 @@
 package com.slyph.cloverchat.feature.updatechecker;
 
 import com.slyph.cloverchat.CloverChatPlugin;
-import org.bukkit.Bukkit;
-import org.bukkit.scheduler.BukkitTask;
+import com.slyph.cloverchat.util.CompatScheduler;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -28,7 +27,7 @@ public final class UpdateCheckerService {
 
     private final CloverChatPlugin plugin;
     private final HttpClient httpClient;
-    private BukkitTask periodicTask;
+    private CompatScheduler.TaskHandle periodicTask;
 
     public UpdateCheckerService(CloverChatPlugin plugin) {
         this.plugin = plugin;
@@ -43,7 +42,7 @@ public final class UpdateCheckerService {
         }
 
         if (CHECK_ON_STARTUP) {
-            Bukkit.getScheduler().runTaskAsynchronously(plugin, this::checkNow);
+            plugin.scheduler().runAsync(this::checkNow);
         }
 
         long intervalHours = CHECK_INTERVAL_HOURS;
@@ -52,7 +51,7 @@ public final class UpdateCheckerService {
         }
 
         long intervalTicks = intervalHours * 72000L;
-        periodicTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::checkNow, intervalTicks, intervalTicks);
+        periodicTask = plugin.scheduler().runAsyncRepeating(this::checkNow, intervalTicks, intervalTicks);
     }
 
     public void restart() {

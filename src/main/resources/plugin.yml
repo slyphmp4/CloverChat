@@ -2,6 +2,7 @@ name: CloverChat
 version: ${version}
 main: com.slyph.cloverchat.CloverChatPlugin
 api-version: 1.16
+folia-supported: true
 authors: [slyph]
 softdepend: [PlaceholderAPI]
 description: Настраиваемый чат для сервера
