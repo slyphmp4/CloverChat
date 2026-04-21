@@ -4,6 +4,7 @@ import com.slyph.cloverchat.command.PrivateMessageCommand;
 import com.slyph.cloverchat.command.ReloadCommand;
 import com.slyph.cloverchat.command.completer.PrivateMessageTabCompleter;
 import com.slyph.cloverchat.command.completer.ReloadTabCompleter;
+import com.slyph.cloverchat.feature.automessage.AutoMessageService;
 import com.slyph.cloverchat.feature.headmessage.HeadMessageService;
 import com.slyph.cloverchat.feature.updatechecker.UpdateCheckerService;
 import com.slyph.cloverchat.listener.ChatListener;
@@ -38,8 +39,10 @@ public final class CloverChatPlugin extends JavaPlugin {
     private boolean placeholderApiHooked;
     private HeadMessageService headMessageService;
     private UpdateCheckerService updateCheckerService;
+    private AutoMessageService autoMessageService;
     private FileConfiguration messagesConfiguration;
     private FileConfiguration hoversConfiguration;
+    private FileConfiguration autoMessagesConfiguration;
     private boolean modernChatBridgeEnabled;
     private String activeLanguage = DEFAULT_LANGUAGE;
 
@@ -50,6 +53,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         placeholderApiHooked = getServer().getPluginManager().getPlugin("PlaceholderAPI") != null;
         headMessageService = new HeadMessageService(this);
         updateCheckerService = new UpdateCheckerService(this);
+        autoMessageService = new AutoMessageService(this);
 
         ChatListener chatListener = new ChatListener(this);
         modernChatBridgeEnabled = new ModernChatBridge(this, chatListener).register();
@@ -75,6 +79,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         }
 
         updateCheckerService.start();
+        autoMessageService.start();
         logStartupBanner();
     }
 
@@ -85,6 +90,9 @@ public final class CloverChatPlugin extends JavaPlugin {
         }
         if (updateCheckerService != null) {
             updateCheckerService.stop();
+        }
+        if (autoMessageService != null) {
+            autoMessageService.stop();
         }
     }
 
@@ -98,6 +106,10 @@ public final class CloverChatPlugin extends JavaPlugin {
 
     public FileConfiguration hovers() {
         return hoversConfiguration;
+    }
+
+    public FileConfiguration autoMessages() {
+        return autoMessagesConfiguration;
     }
 
     public boolean isPlaceholderApiHooked() {
@@ -146,6 +158,9 @@ public final class CloverChatPlugin extends JavaPlugin {
         if (updateCheckerService != null) {
             updateCheckerService.restart();
         }
+        if (autoMessageService != null) {
+            autoMessageService.restart();
+        }
     }
 
     private void loadAdditionalConfigurations() {
@@ -161,8 +176,10 @@ public final class CloverChatPlugin extends JavaPlugin {
 
         File messagesFile = ensureLanguageResourceFile(activeLanguage, "messages.yml");
         File hoversFile = ensureLanguageResourceFile(activeLanguage, "hovers.yml");
+        File autoMessagesFile = ensureRootResourceFile("auto-messages.yml");
         messagesConfiguration = YamlConfiguration.loadConfiguration(messagesFile);
         hoversConfiguration = YamlConfiguration.loadConfiguration(hoversFile);
+        autoMessagesConfiguration = YamlConfiguration.loadConfiguration(autoMessagesFile);
     }
 
     private void ensureLanguageResources(String language) {
@@ -174,6 +191,14 @@ public final class CloverChatPlugin extends JavaPlugin {
         File file = new File(new File(getDataFolder(), "langs" + File.separator + language), fileName);
         if (!file.exists()) {
             saveResource("langs/" + language + "/" + fileName, false);
+        }
+        return file;
+    }
+
+    private File ensureRootResourceFile(String fileName) {
+        File file = new File(getDataFolder(), fileName);
+        if (!file.exists()) {
+            saveResource(fileName, false);
         }
         return file;
     }
@@ -212,6 +237,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         String version = getDescription().getVersion();
         String placeholderApiStatus = placeholderApiHooked ? "Подключен" : "Не найден";
         String updateCheckerStatus = configuration().getBoolean("update-checker.enabled", true) ? "Включена" : "Выключена";
+        String autoMessagesStatus = autoMessages() != null && autoMessages().getBoolean("enabled", false) ? "Включены" : "Выключены";
 
         getLogger().info("");
         getLogger().info(LOG_TOP);
@@ -223,7 +249,8 @@ public final class CloverChatPlugin extends JavaPlugin {
         getLogger().info(boxLine("Чат режим: " + (modernChatBridgeEnabled ? "AsyncChatEvent (1.19+)" : "AsyncPlayerChatEvent")));
         getLogger().info(boxLine("PlaceholderAPI: " + placeholderApiStatus));
         getLogger().info(boxLine("Проверка обновлений: " + updateCheckerStatus));
-        getLogger().info(boxLine("Конфиги: config.yml | langs/" + activeLanguage + "/"));
+        getLogger().info(boxLine("Автосообщения: " + autoMessagesStatus));
+        getLogger().info(boxLine("Конфиги: config.yml | auto-messages.yml | langs/" + activeLanguage + "/"));
         getLogger().info(LOG_BOTTOM);
         getLogger().info("");
     }
