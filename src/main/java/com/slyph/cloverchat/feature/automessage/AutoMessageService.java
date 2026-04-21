@@ -4,7 +4,7 @@ import com.slyph.cloverchat.CloverChatPlugin;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitTask;
+import com.slyph.cloverchat.util.CompatScheduler;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -15,7 +15,7 @@ public final class AutoMessageService {
 
     private final CloverChatPlugin plugin;
     private final Random random = new Random();
-    private BukkitTask task;
+    private CompatScheduler.TaskHandle task;
     private int nextMessageIndex;
 
     public AutoMessageService(CloverChatPlugin plugin) {
@@ -35,7 +35,7 @@ public final class AutoMessageService {
         long intervalTicks = intervalSeconds * 20L;
         long firstDelayTicks = firstDelaySeconds * 20L;
 
-        task = Bukkit.getScheduler().runTaskTimer(plugin, this::broadcastNextMessage, firstDelayTicks, intervalTicks);
+        task = plugin.scheduler().runGlobalRepeating(this::broadcastNextMessage, firstDelayTicks, intervalTicks);
     }
 
     public void restart() {

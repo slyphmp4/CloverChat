@@ -49,7 +49,13 @@ public final class ChatListener implements Listener {
     }
 
     public void handleIncomingChat(UUID senderId, String originalMessage) {
-        Bukkit.getScheduler().runTask(plugin, () -> handleChat(senderId, originalMessage));
+        plugin.scheduler().runGlobal(() -> {
+            Player sender = Bukkit.getPlayer(senderId);
+            if (sender == null || !sender.isOnline()) {
+                return;
+            }
+            plugin.scheduler().runEntity(sender, () -> handleChat(senderId, originalMessage));
+        });
     }
 
     private void handleChat(UUID senderId, String originalMessage) {

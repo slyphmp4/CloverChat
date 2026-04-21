@@ -1,22 +1,22 @@
 package com.slyph.cloverchat.feature.headmessage;
 
 import com.slyph.cloverchat.CloverChatPlugin;
+import com.slyph.cloverchat.util.CompatScheduler;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitTask;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class HeadMessageService {
 
     private final CloverChatPlugin plugin;
-    private final Map<UUID, ActiveHeadMessage> activeMessages = new HashMap<>();
+    private final Map<UUID, ActiveHeadMessage> activeMessages = new ConcurrentHashMap<>();
 
     public HeadMessageService(CloverChatPlugin plugin) {
         this.plugin = plugin;
@@ -36,6 +36,15 @@ public final class HeadMessageService {
             return;
         }
 
+        plugin.scheduler().runEntity(player, () -> showInternal(player.getUniqueId(), source));
+    }
+
+    private void showInternal(UUID playerId, String source) {
+        Player player = Bukkit.getPlayer(playerId);
+        if (player == null || !player.isOnline() || player.isDead()) {
+            return;
+        }
+
         int maxLength = Math.max(1, plugin.configuration().getInt("chat-above-head.max-length", 72));
         String prepared = source.length() > maxLength && maxLength > 3
                 ? source.substring(0, maxLength - 3) + "..."
@@ -46,7 +55,7 @@ public final class HeadMessageService {
         long now = System.currentTimeMillis();
         long expiresAt = now + durationSeconds * 1000L;
 
-        ActiveHeadMessage active = activeMessages.get(player.getUniqueId());
+        ActiveHeadMessage active = activeMessages.get(playerId);
         if (active != null && active.isAlive(player) && now <= active.expiresAtMillis) {
             active.comboCount += 1;
             active.expiresAtMillis = expiresAt;
@@ -55,7 +64,7 @@ public final class HeadMessageService {
             return;
         }
 
-        clear(player.getUniqueId());
+        clear(playerId);
 
         Location spawnLocation = player.getLocation().add(0.0D, yOffset, 0.0D);
         ArmorStand stand = (ArmorStand) player.getWorld().spawnEntity(spawnLocation, EntityType.ARMOR_STAND);
@@ -76,30 +85,33 @@ public final class HeadMessageService {
         created.yOffset = yOffset;
         stand.setCustomName(buildRendered(player, prepared, created.comboCount));
 
-        BukkitTask followTask = new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (!created.isAlive(player)) {
-                    clear(player.getUniqueId());
-                    return;
-                }
-
-                if (System.currentTimeMillis() >= created.expiresAtMillis) {
-                    clear(player.getUniqueId());
-                    return;
-                }
-
-                if (!created.stand.getWorld().equals(player.getWorld())) {
-                    clear(player.getUniqueId());
-                    return;
-                }
-
-                created.stand.teleport(player.getLocation().add(0.0D, created.yOffset, 0.0D));
+        CompatScheduler.TaskHandle followTask = plugin.scheduler().runEntityRepeating(player, 0L, 2L, () -> {
+            Player currentPlayer = Bukkit.getPlayer(playerId);
+            if (currentPlayer == null || !currentPlayer.isOnline() || currentPlayer.isDead()) {
+                clear(playerId);
+                return;
             }
-        }.runTaskTimer(plugin, 0L, 2L);
+
+            if (System.currentTimeMillis() >= created.expiresAtMillis) {
+                clear(playerId);
+                return;
+            }
+
+            if (!created.stand.isValid()) {
+                clear(playerId);
+                return;
+            }
+
+            if (!created.stand.getWorld().equals(currentPlayer.getWorld())) {
+                clear(playerId);
+                return;
+            }
+
+            created.stand.teleport(currentPlayer.getLocation().add(0.0D, created.yOffset, 0.0D));
+        });
 
         created.task = followTask;
-        activeMessages.put(player.getUniqueId(), created);
+        activeMessages.put(playerId, created);
     }
 
     public void clear(UUID playerId) {
@@ -111,8 +123,14 @@ public final class HeadMessageService {
         if (active.task != null) {
             active.task.cancel();
         }
-        if (active.stand.isValid()) {
-            active.stand.remove();
+        Runnable removeTask = () -> {
+            if (active.stand.isValid()) {
+                active.stand.remove();
+            }
+        };
+        CompatScheduler.TaskHandle handle = plugin.scheduler().runEntity(active.stand, removeTask);
+        if (handle == null) {
+            plugin.scheduler().runGlobal(removeTask);
         }
     }
 
@@ -125,7 +143,7 @@ public final class HeadMessageService {
     private static final class ActiveHeadMessage {
 
         private final ArmorStand stand;
-        private BukkitTask task;
+        private CompatScheduler.TaskHandle task;
         private int comboCount;
         private long expiresAtMillis;
         private double yOffset;
