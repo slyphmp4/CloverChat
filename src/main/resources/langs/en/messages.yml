@@ -9,8 +9,12 @@ chat-types:
   global: "Global"
 
 group-chat:
-  default-format: "&#9f54ff[&#c986ff%channel%&#9f54ff] &#f4e7ff• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#5b4f66→ &#f7ecff%message%"
-  formats: {}
+  default-format: "&#6A6A9E[&#A5A5E6%channel%&#6A6A9E] &#ECECFF• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#565670→ &#F6F6FF%message%"
+  formats:
+    admin: "&#8A2323[&#FF6464A&#8A2323] &#FFDADA• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#664949→ &#FFECEC%message%"
+    moderator: "&#266F8A[&#68D8FFM&#266F8A] &#DAF4FF• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#4A6266→ &#ECFAFF%message%"
+    vip: "&#8E6A17[&#FFD667V&#8E6A17] &#FFF3D6• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#665E4A→ &#FFF9EC%message%"
+    builder: "&#2B8A3D[&#6DFF87B&#2B8A3D] &#DAFFE1• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#4A6650→ &#ECFFF0%message%"
   no-permission-message:
     - "&7"
     - "&#ff6b6b✖ Error  &#ffc1c1|  &#ff8f8fYou cannot write in channel &#ffb8b8%channel%"

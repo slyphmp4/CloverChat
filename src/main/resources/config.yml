@@ -24,45 +24,45 @@ global-chat:
   enabled: true
   prefix: "!"
 
-# Групповые каналы чата.
-# Как работает:
-# 1) Включите group-chat.enabled: true
-# 2) Создайте канал в group-chat.channels (например staff, vip, donor)
-# 3) Укажите prefix, с которого начинается сообщение для канала
-# 4) Укажите права send-permission и view-permission
-# 5) Выдайте права через ваш плагин прав (например UltraPermissions)
-#
-# Что означает каждый параметр канала:
-# enabled: true/false — включен ли конкретный канал
-# prefix: префикс канала в начале сообщения (например "@s " или "@vip ")
-# display-name: имя канала для формата чата и hover
-# send-permission: право на отправку сообщений в этот канал
-# view-permission: право на просмотр сообщений этого канала
-#
-# Важно:
-# - Приоритет по самому длинному совпадающему prefix
-# - Если игрок написал сообщение без channel prefix, сработает обычный local/global чат
-# - Рекомендуется использовать prefix с пробелом на конце: "@s ", "@v ", "@admin "
-#
-# Пример:
-# Игрок пишет: "@s проверка канала"
-# Если у игрока есть send-permission для staff, сообщение уйдет в staff-канал
-# Увидят его только игроки с view-permission staff (и сам отправитель)
+# Group chat channels (ready preset)
+# Quick start:
+# 1) Keep group-chat.enabled: true
+# 2) Give rights for the needed channel:
+#    cloverchat.channel.<channel>.send
+#    cloverchat.channel.<channel>.view
+# 3) Player writes message with channel prefix:
+#    @a test  -> admin channel
+#    @m test  -> moderator channel
+#    @v test  -> vip channel
+#    @b test  -> builder channel
+# 4) Longest prefix wins if more than one prefix matches
 group-chat:
-  enabled: false
+  enabled: true
   channels:
-    staff:
+    admin:
       enabled: true
-      prefix: "@s "
-      display-name: "Staff"
-      send-permission: "cloverchat.channel.staff.send"
-      view-permission: "cloverchat.channel.staff.view"
+      prefix: "@a "
+      display-name: "Admin"
+      send-permission: "cloverchat.channel.admin.send"
+      view-permission: "cloverchat.channel.admin.view"
+    moderator:
+      enabled: true
+      prefix: "@m "
+      display-name: "Moderator"
+      send-permission: "cloverchat.channel.moderator.send"
+      view-permission: "cloverchat.channel.moderator.view"
     vip:
       enabled: true
       prefix: "@v "
       display-name: "VIP"
       send-permission: "cloverchat.channel.vip.send"
       view-permission: "cloverchat.channel.vip.view"
+    builder:
+      enabled: true
+      prefix: "@b "
+      display-name: "Builder"
+      send-permission: "cloverchat.channel.builder.send"
+      view-permission: "cloverchat.channel.builder.view"
 
 private-chat:
   enabled: true
