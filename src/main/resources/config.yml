@@ -5,6 +5,31 @@ language: "ru"
 update-checker:
   enabled: true
 
+# Cross-server chat sync through Velocity proxy.
+# Requirement in velocity.toml:
+# bungee-plugin-message-channel = true
+#
+# Setup steps:
+# 1) Put CloverChat on every backend server behind Velocity.
+# 2) Set proxy-sync.enabled: true on every server.
+# 3) Set unique proxy-sync.server-id for each backend server.
+# 4) Keep the same proxy-sync.subchannel on all servers.
+# 5) Choose which chat modes to sync in proxy-sync.sync-modes.
+proxy-sync:
+  enabled: false
+  server-id: "survival"
+  target-server: "ALL"
+  subchannel: "CloverChatSync"
+  dedup-cache-seconds: 120
+  debug-log: false
+  sync-modes:
+    global: true
+    group: true
+    local: false
+  server-tag:
+    enabled: true
+    format: "&#65798F[&#AFCFFF%server%&#65798F] "
+
 chat-name-placeholders:
   - "%player_name%"
   - "%cloverrep_nick%"
