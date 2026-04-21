@@ -67,17 +67,17 @@ public final class ChatListener implements Listener {
             return;
         }
 
-        boolean globalEnabled = plugin.configuration().getBoolean("global-chat.enabled", true);
-        String globalPrefix = plugin.configuration().getString("global-chat.prefix", "!");
-        boolean isGlobal = globalEnabled && originalMessage.startsWith(globalPrefix);
-
-        if (!isGlobal && !plugin.configuration().getBoolean("local-chat.enabled", true)) {
+        ChatRoute chatRoute = resolveChatRoute(sender, originalMessage);
+        if (chatRoute.blocked) {
             return;
         }
 
-        String chatMessage = isGlobal
-                ? originalMessage.substring(globalPrefix.length())
+        String chatMessage = chatRoute.prefixLength > 0 && originalMessage.length() >= chatRoute.prefixLength
+                ? originalMessage.substring(chatRoute.prefixLength)
                 : originalMessage;
+        if (chatMessage.isBlank()) {
+            return;
+        }
 
         chatMessage = censorMessage(chatMessage);
         MentionResult mentionResult = processMentions(chatMessage);
@@ -89,10 +89,7 @@ public final class ChatListener implements Listener {
         String prefixToken = "__cloverchat_prefix__";
         String reputationToken = "__cloverchat_reputation__";
         String messageToken = "__cloverchat_message__";
-        String format = plugin.messages().getString(
-                isGlobal ? "global-chat.format" : "local-chat.format",
-                isGlobal ? "&7[&6G&7] &f%player_name% &8» &f%message%" : "&7[&aL&7] &f%player_name% &8» &f%message%"
-        );
+        String format = chatRoute.format;
 
         String resolvedDisplayName = resolveDisplayName(sender, format);
         String resolvedPrefix = resolveUltraPermissionsPrefix(sender, format);
@@ -122,18 +119,32 @@ public final class ChatListener implements Listener {
                 resolvedDisplayName,
                 resolvedReputation,
                 chatMessage,
-                isGlobal,
+                chatRoute.chatTypeName,
                 messageTime,
                 messageId
         );
-        dispatchMessage(sender, isGlobal, finalMessage);
+        dispatchMessage(sender, chatRoute, finalMessage);
         plugin.headMessageService().show(sender, chatMessage);
         playMentionSound(mentionResult.mentionedPlayers);
     }
 
-    private void dispatchMessage(Player sender, boolean isGlobal, Component message) {
-        if (isGlobal) {
+    private void dispatchMessage(Player sender, ChatRoute chatRoute, Component message) {
+        if (chatRoute.mode == ChatMode.GLOBAL) {
             for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
+                onlinePlayer.sendMessage(message);
+            }
+            return;
+        }
+
+        if (chatRoute.mode == ChatMode.GROUP) {
+            for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
+                if (onlinePlayer.getUniqueId().equals(sender.getUniqueId())) {
+                    onlinePlayer.sendMessage(message);
+                    continue;
+                }
+                if (!chatRoute.viewPermission.isBlank() && !onlinePlayer.hasPermission(chatRoute.viewPermission)) {
+                    continue;
+                }
                 onlinePlayer.sendMessage(message);
             }
             return;
@@ -164,7 +175,7 @@ public final class ChatListener implements Listener {
             String resolvedDisplayName,
             String resolvedReputation,
             String messageText,
-            boolean isGlobal,
+            String chatTypeName,
             String messageTime,
             String messageId
     ) {
@@ -216,7 +227,7 @@ public final class ChatListener implements Listener {
                 result = result.append(buildReputationComponent(sender, resolvedReputation));
                 currentIndex = tokenStart + reputationToken.length();
             } else {
-                result = result.append(buildChatMessageComponent(sender, messageText, isGlobal, messageTime, messageId));
+                result = result.append(buildChatMessageComponent(sender, messageText, chatTypeName, messageTime, messageId));
                 currentIndex = tokenStart + messageToken.length();
             }
         }
@@ -228,7 +239,7 @@ public final class ChatListener implements Listener {
         return result;
     }
 
-    private Component buildChatMessageComponent(Player sender, String messageText, boolean isGlobal, String messageTime, String messageId) {
+    private Component buildChatMessageComponent(Player sender, String messageText, String chatTypeName, String messageTime, String messageId) {
         String resolvedMessage = plugin.applyPlaceholders(sender, messageText == null ? "" : messageText);
         Component messageComponent = parseLinksWithColoredText(resolvedMessage);
 
@@ -244,13 +255,12 @@ public final class ChatListener implements Listener {
             return messageComponent;
         }
 
-        String chatType = isGlobal ? "Глобальный" : "Локальный";
         String plainMessage = extractPlainText(resolvedMessage);
         List<String> replaced = new ArrayList<>();
         for (String line : hoverLines) {
             String resolved = line
                     .replace("%player_name%", sender.getName())
-                    .replace("%chat_type%", chatType)
+                    .replace("%chat_type%", chatTypeName)
                     .replace("%message%", resolvedMessage)
                     .replace("%message_plain%", plainMessage)
                     .replace("%message_time%", messageTime)
@@ -266,6 +276,111 @@ public final class ChatListener implements Listener {
         }
 
         return messageComponent;
+    }
+
+    private ChatRoute resolveChatRoute(Player sender, String originalMessage) {
+        ChatRoute groupRoute = resolveGroupRoute(sender, originalMessage);
+        if (groupRoute != null) {
+            return groupRoute;
+        }
+
+        boolean globalEnabled = plugin.configuration().getBoolean("global-chat.enabled", true);
+        String globalPrefix = plugin.configuration().getString("global-chat.prefix", "!");
+        if (globalEnabled && globalPrefix != null && !globalPrefix.isBlank() && originalMessage.startsWith(globalPrefix)) {
+            String format = plugin.messages().getString("global-chat.format", "&7[&6G&7] &f%player_name% &8» &f%message%");
+            String chatTypeName = plugin.messages().getString("chat-types.global", "Global");
+            return ChatRoute.global(globalPrefix.length(), format, chatTypeName);
+        }
+
+        if (!plugin.configuration().getBoolean("local-chat.enabled", true)) {
+            return ChatRoute.blocked();
+        }
+
+        String format = plugin.messages().getString("local-chat.format", "&7[&aL&7] &f%player_name% &8» &f%message%");
+        String chatTypeName = plugin.messages().getString("chat-types.local", "Local");
+        return ChatRoute.local(format, chatTypeName);
+    }
+
+    private ChatRoute resolveGroupRoute(Player sender, String originalMessage) {
+        if (!plugin.configuration().getBoolean("group-chat.enabled", false)) {
+            return null;
+        }
+
+        ConfigurationSection channelsSection = plugin.configuration().getConfigurationSection("group-chat.channels");
+        if (channelsSection == null) {
+            return null;
+        }
+
+        GroupChannelCandidate matched = null;
+        for (String channelKey : channelsSection.getKeys(false)) {
+            ConfigurationSection channelSection = channelsSection.getConfigurationSection(channelKey);
+            if (channelSection == null) {
+                continue;
+            }
+
+            String prefix = channelSection.getString("prefix", "");
+            if (prefix == null || prefix.isBlank()) {
+                continue;
+            }
+
+            if (!originalMessage.startsWith(prefix)) {
+                continue;
+            }
+
+            if (matched == null || prefix.length() > matched.prefix.length()) {
+                matched = new GroupChannelCandidate(channelKey, prefix, channelSection);
+            }
+        }
+
+        if (matched == null) {
+            return null;
+        }
+
+        String channelDisplayName = matched.section.getString("display-name", matched.key);
+        channelDisplayName = plugin.applyPlaceholders(sender, channelDisplayName);
+        if (channelDisplayName == null || channelDisplayName.isBlank()) {
+            channelDisplayName = matched.key;
+        }
+
+        if (!matched.section.getBoolean("enabled", true)) {
+            List<String> disabledLines = plugin.messages().getStringList("group-chat.disabled-message");
+            if (disabledLines.isEmpty()) {
+                disabledLines = Arrays.asList("&7", "&cChannel %channel% is currently disabled", "&7");
+            }
+            sendChannelNotice(sender, disabledLines, channelDisplayName);
+            return ChatRoute.blocked();
+        }
+
+        String sendPermission = matched.section.getString("send-permission", "");
+        if (sendPermission != null && !sendPermission.isBlank() && !sender.hasPermission(sendPermission)) {
+            List<String> noPermissionLines = plugin.messages().getStringList("group-chat.no-permission-message");
+            if (noPermissionLines.isEmpty()) {
+                noPermissionLines = Arrays.asList("&7", "&cYou do not have permission to write to %channel%", "&7");
+            }
+            sendChannelNotice(sender, noPermissionLines, channelDisplayName);
+            return ChatRoute.blocked();
+        }
+
+        String defaultFormat = plugin.messages().getString("group-chat.default-format", "&7[&d%channel%&7] &f%player_name% &8» &f%message%");
+        String format = plugin.messages().getString("group-chat.formats." + matched.key, defaultFormat);
+        if (format == null || format.isBlank()) {
+            format = defaultFormat;
+        }
+        format = format.replace("%channel%", channelDisplayName);
+
+        String viewPermission = matched.section.getString("view-permission", sendPermission == null ? "" : sendPermission);
+        if (viewPermission == null) {
+            viewPermission = "";
+        }
+        return ChatRoute.group(matched.prefix.length(), format, channelDisplayName, viewPermission);
+    }
+
+    private void sendChannelNotice(Player player, List<String> lines, String channelName) {
+        for (String line : lines) {
+            String resolved = line.replace("%channel%", channelName);
+            String withPlaceholders = plugin.applyPlaceholders(player, resolved);
+            player.sendMessage(plugin.deserializeColored(withPlaceholders));
+        }
     }
 
     private Component buildPlayerNameComponent(Player sender, String displayName) {
@@ -785,6 +900,58 @@ public final class ChatListener implements Listener {
 
         builder.append(word.charAt(word.length() - 1));
         return builder.toString();
+    }
+
+    private enum ChatMode {
+        LOCAL,
+        GLOBAL,
+        GROUP
+    }
+
+    private static final class ChatRoute {
+        private final ChatMode mode;
+        private final boolean blocked;
+        private final int prefixLength;
+        private final String format;
+        private final String chatTypeName;
+        private final String viewPermission;
+
+        private ChatRoute(ChatMode mode, boolean blocked, int prefixLength, String format, String chatTypeName, String viewPermission) {
+            this.mode = mode;
+            this.blocked = blocked;
+            this.prefixLength = prefixLength;
+            this.format = format;
+            this.chatTypeName = chatTypeName;
+            this.viewPermission = viewPermission;
+        }
+
+        private static ChatRoute blocked() {
+            return new ChatRoute(ChatMode.LOCAL, true, 0, "", "", "");
+        }
+
+        private static ChatRoute local(String format, String chatTypeName) {
+            return new ChatRoute(ChatMode.LOCAL, false, 0, format, chatTypeName, "");
+        }
+
+        private static ChatRoute global(int prefixLength, String format, String chatTypeName) {
+            return new ChatRoute(ChatMode.GLOBAL, false, prefixLength, format, chatTypeName, "");
+        }
+
+        private static ChatRoute group(int prefixLength, String format, String chatTypeName, String viewPermission) {
+            return new ChatRoute(ChatMode.GROUP, false, prefixLength, format, chatTypeName, viewPermission);
+        }
+    }
+
+    private static final class GroupChannelCandidate {
+        private final String key;
+        private final String prefix;
+        private final ConfigurationSection section;
+
+        private GroupChannelCandidate(String key, String prefix, ConfigurationSection section) {
+            this.key = key;
+            this.prefix = prefix;
+            this.section = section;
+        }
     }
 
     private static final class MentionResult {
