@@ -24,12 +24,30 @@ global-chat:
   enabled: true
   prefix: "!"
 
-# Additional channels with custom prefixes.
-# Priority is by longest prefix match.
-# Example:
-#   @hello  -> vip channel
-#   @h      -> another channel
-# Message "@hello text" will go to "vip" because "@hello" is longer.
+# Групповые каналы чата.
+# Как работает:
+# 1) Включите group-chat.enabled: true
+# 2) Создайте канал в group-chat.channels (например staff, vip, donor)
+# 3) Укажите prefix, с которого начинается сообщение для канала
+# 4) Укажите права send-permission и view-permission
+# 5) Выдайте права через ваш плагин прав (например UltraPermissions)
+#
+# Что означает каждый параметр канала:
+# enabled: true/false — включен ли конкретный канал
+# prefix: префикс канала в начале сообщения (например "@s " или "@vip ")
+# display-name: имя канала для формата чата и hover
+# send-permission: право на отправку сообщений в этот канал
+# view-permission: право на просмотр сообщений этого канала
+#
+# Важно:
+# - Приоритет по самому длинному совпадающему prefix
+# - Если игрок написал сообщение без channel prefix, сработает обычный local/global чат
+# - Рекомендуется использовать prefix с пробелом на конце: "@s ", "@v ", "@admin "
+#
+# Пример:
+# Игрок пишет: "@s проверка канала"
+# Если у игрока есть send-permission для staff, сообщение уйдет в staff-канал
+# Увидят его только игроки с view-permission staff (и сам отправитель)
 group-chat:
   enabled: false
   channels:
