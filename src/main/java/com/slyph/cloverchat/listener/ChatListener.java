@@ -1,11 +1,13 @@
 package com.slyph.cloverchat.listener;
 
 import com.slyph.cloverchat.CloverChatPlugin;
+import com.slyph.cloverchat.feature.messageinspect.model.ChatMessageAuditRecord;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -35,6 +37,7 @@ public final class ChatListener implements Listener {
     private static final Pattern LINK_PATTERN = Pattern.compile("(https?://\\S+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern MENTION_PATTERN = Pattern.compile("@([A-Za-z0-9_]{3,16})");
     private static final AtomicLong MESSAGE_COUNTER = new AtomicLong(0L);
+    private static final GsonComponentSerializer MESSAGE_SERIALIZER = GsonComponentSerializer.gson();
 
     private final CloverChatPlugin plugin;
 
@@ -100,6 +103,7 @@ public final class ChatListener implements Listener {
         String resolvedDisplayName = resolveDisplayName(sender, format);
         String resolvedPrefix = resolveUltraPermissionsPrefix(sender, format);
         String resolvedReputation = resolveReputationValue(sender, format);
+        String resolvedGroup = resolveUltraPermissionsGroup(sender);
         format = replaceNamePlaceholders(format, playerToken);
         format = format.replace("%uperms_prefix%", prefixToken);
         format = replaceReputationPlaceholders(format, reputationToken);
@@ -132,7 +136,76 @@ public final class ChatListener implements Listener {
         dispatchMessage(sender, chatRoute, finalMessage);
         plugin.proxyChatSyncService().forwardMessage(sender, messageId, chatRoute.mode.name(), chatRoute.viewPermission, finalMessage);
         plugin.headMessageService().show(sender, chatMessage);
+        plugin.messageAuditService().trackMessage(buildAuditRecord(
+                sender,
+                originalMessage,
+                chatMessage,
+                finalMessage,
+                chatRoute,
+                messageId,
+                messageTime,
+                resolvedDisplayName,
+                resolvedGroup,
+                resolvedPrefix,
+                resolvedReputation
+        ));
         playMentionSound(mentionResult.mentionedPlayers);
+    }
+
+    private ChatMessageAuditRecord buildAuditRecord(
+            Player sender,
+            String rawInput,
+            String finalText,
+            Component finalMessageComponent,
+            ChatRoute route,
+            String messageId,
+            String messageTime,
+            String displayName,
+            String groupName,
+            String prefix,
+            String reputation
+    ) {
+        Location location = sender.getLocation();
+        String worldName = location.getWorld() == null ? "" : location.getWorld().getName();
+        String groupChannel = route.mode == ChatMode.GROUP ? route.chatTypeName : "";
+        String finalJson;
+        try {
+            finalJson = MESSAGE_SERIALIZER.serialize(finalMessageComponent);
+        } catch (Exception ignored) {
+            finalJson = "";
+        }
+
+        return new ChatMessageAuditRecord(
+                messageId,
+                System.currentTimeMillis(),
+                messageTime,
+                resolveServerId(),
+                sender.getUniqueId().toString(),
+                sender.getName(),
+                displayName,
+                groupName,
+                prefix,
+                reputation,
+                route.mode.name(),
+                route.chatTypeName,
+                groupChannel,
+                worldName,
+                location.getX(),
+                location.getY(),
+                location.getZ(),
+                rawInput,
+                finalText,
+                finalJson,
+                route.viewPermission
+        );
+    }
+
+    private String resolveServerId() {
+        String value = plugin.configuration().getString("proxy-sync.server-id", "server");
+        if (value == null || value.isBlank()) {
+            return "server";
+        }
+        return value;
     }
 
     private void dispatchMessage(Player sender, ChatRoute chatRoute, Component message) {

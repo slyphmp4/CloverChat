@@ -1,4 +1,4 @@
-﻿local-chat:
+local-chat:
   format: "&#20a688[&#40e7afʟ&#20a688] &#c0ffec• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#4f5b58→ &#d6fff7%message%"
 
 global-chat:
@@ -103,4 +103,44 @@ system-messages:
   reload-success:
     - "&7"
     - "&#24e765★ Чат  &#89ffa6|  &#24e765Плагін успішно перезавантажено"
+    - "&7"
+
+inspect-messages:
+  usage:
+    - "&7"
+    - "&#24e765★ Inspect  &#89ffa6|  &#24e765Usage: /cloverchat inspect <message_id>"
+    - "&7"
+  no-permission:
+    - "&7"
+    - "&#ff6b6b✖ Error  &#ffc1c1|  &#ff8f8fYou do not have permission for this command"
+    - "&7"
+  disabled:
+    - "&7"
+    - "&#ff6b6b✖ Error  &#ffc1c1|  &#ff8f8fMessage Inspector is disabled in config.yml"
+    - "&7"
+  loading:
+    - "&7"
+    - "&#24e765★ Inspect  &#89ffa6|  &#24e765Searching message by ID..."
+    - "&7"
+  not-found:
+    - "&7"
+    - "&#ff6b6b✖ Error  &#ffc1c1|  &#ff8f8fMessage with this ID was not found"
+    - "&7"
+  error:
+    - "&7"
+    - "&#ff6b6b✖ Error  &#ffc1c1|  &#ff8f8fFailed to read message from database"
+    - "&7"
+  result:
+    - "&7"
+    - "&#24e765★ Inspect  &#89ffa6|  &#24e765ID: &#d6fff7%message_id%"
+    - "&#CBFFF7✎ Author: &#90FFE7%player_name% &#A5A5A5(%player_uuid%)"
+    - "&#CBFFF7⚑ Group: &#90FFE7%player_group%"
+    - "&#CBFFF7⚑ Prefix: &#90FFE7%player_prefix%"
+    - "&#CBFFF7⚑ Reputation: &#90FFE7%player_reputation%"
+    - "&#CBFFF7🕓 Time: &#90FFE7%message_time% &#A5A5A5(%message_created_at%)"
+    - "&#CBFFF7🌐 Server: &#90FFE7%server_id% &#A5A5A5| &#90FFE7%world% &#A5A5A5X:%x% Y:%y% Z:%z%"
+    - "&#CBFFF7📡 Mode: &#90FFE7%chat_mode% &#A5A5A5| &#90FFE7%chat_type% &#A5A5A5| &#90FFE7%group_channel%"
+    - "&#CBFFF7🔒 View permission: &#90FFE7%view_permission%"
+    - "&#CBFFF7🧾 Raw: &#90FFE7%message_raw%"
+    - "&#CBFFF7💬 Final: &#90FFE7%message_final%"
     - "&7"

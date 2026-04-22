@@ -1,11 +1,14 @@
 package com.slyph.cloverchat;
 
+import com.slyph.cloverchat.command.CloverChatCommand;
 import com.slyph.cloverchat.command.PrivateMessageCommand;
 import com.slyph.cloverchat.command.ReloadCommand;
+import com.slyph.cloverchat.command.completer.CloverChatTabCompleter;
 import com.slyph.cloverchat.command.completer.PrivateMessageTabCompleter;
 import com.slyph.cloverchat.command.completer.ReloadTabCompleter;
 import com.slyph.cloverchat.feature.automessage.AutoMessageService;
 import com.slyph.cloverchat.feature.headmessage.HeadMessageService;
+import com.slyph.cloverchat.feature.messageinspect.MessageAuditService;
 import com.slyph.cloverchat.feature.proxysync.VelocityProxyChatService;
 import com.slyph.cloverchat.feature.updatechecker.UpdateCheckerService;
 import com.slyph.cloverchat.listener.ChatListener;
@@ -41,6 +44,7 @@ public final class CloverChatPlugin extends JavaPlugin {
     private boolean placeholderApiHooked;
     private CompatScheduler compatScheduler;
     private HeadMessageService headMessageService;
+    private MessageAuditService messageAuditService;
     private UpdateCheckerService updateCheckerService;
     private AutoMessageService autoMessageService;
     private VelocityProxyChatService velocityProxyChatService;
@@ -57,6 +61,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         placeholderApiHooked = getServer().getPluginManager().getPlugin("PlaceholderAPI") != null;
         compatScheduler = new CompatScheduler(this);
         headMessageService = new HeadMessageService(this);
+        messageAuditService = new MessageAuditService(this);
         updateCheckerService = new UpdateCheckerService(this);
         autoMessageService = new AutoMessageService(this);
         velocityProxyChatService = new VelocityProxyChatService(this);
@@ -84,6 +89,14 @@ public final class CloverChatPlugin extends JavaPlugin {
             reloadPluginCommand.setTabCompleter(new ReloadTabCompleter());
         }
 
+        CloverChatCommand cloverChatCommand = new CloverChatCommand(this);
+        PluginCommand cloverCommand = getCommand("cloverchat");
+        if (cloverCommand != null) {
+            cloverCommand.setExecutor(cloverChatCommand);
+            cloverCommand.setTabCompleter(new CloverChatTabCompleter(this));
+        }
+
+        messageAuditService.start();
         updateCheckerService.start();
         autoMessageService.start();
         velocityProxyChatService.start();
@@ -94,6 +107,9 @@ public final class CloverChatPlugin extends JavaPlugin {
     public void onDisable() {
         if (headMessageService != null) {
             headMessageService.clearAll();
+        }
+        if (messageAuditService != null) {
+            messageAuditService.stop();
         }
         if (updateCheckerService != null) {
             updateCheckerService.stop();
@@ -132,6 +148,10 @@ public final class CloverChatPlugin extends JavaPlugin {
 
     public HeadMessageService headMessageService() {
         return headMessageService;
+    }
+
+    public MessageAuditService messageAuditService() {
+        return messageAuditService;
     }
 
     public CompatScheduler scheduler() {
@@ -178,6 +198,9 @@ public final class CloverChatPlugin extends JavaPlugin {
         }
         if (autoMessageService != null) {
             autoMessageService.restart();
+        }
+        if (messageAuditService != null) {
+            messageAuditService.restart();
         }
         if (velocityProxyChatService != null) {
             velocityProxyChatService.restart();
@@ -260,6 +283,8 @@ public final class CloverChatPlugin extends JavaPlugin {
         String updateCheckerStatus = configuration().getBoolean("update-checker.enabled", true) ? "Включена" : "Выключена";
         String autoMessagesStatus = autoMessages() != null && autoMessages().getBoolean("enabled", false) ? "Включены" : "Выключены";
         String proxySyncStatus = configuration().getBoolean("proxy-sync.enabled", false) ? "Включен" : "Выключен";
+        String messageInspectorStatus = messageAuditService != null && messageAuditService.isEnabled() ? "Включен" : "Выключен";
+        String messageInspectorProfile = messageAuditService == null ? "-" : messageAuditService.activeProfileName();
         String schedulerMode = compatScheduler != null && compatScheduler.isFolia() ? "Folia" : "Paper/Spigot";
 
         getLogger().info("");
@@ -274,6 +299,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         getLogger().info(boxLine("Проверка обновлений: " + updateCheckerStatus));
         getLogger().info(boxLine("Автосообщения: " + autoMessagesStatus));
         getLogger().info(boxLine("Proxy Sync (Velocity): " + proxySyncStatus));
+        getLogger().info(boxLine("Message Inspector: " + messageInspectorStatus + " (" + messageInspectorProfile + ")"));
         getLogger().info(boxLine("Scheduler: " + schedulerMode));
         getLogger().info(boxLine("Конфиги: config.yml | auto-messages.yml | langs/" + activeLanguage + "/"));
         getLogger().info(LOG_BOTTOM);
