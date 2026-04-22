@@ -12,6 +12,10 @@ commands:
     description: Отправить личное сообщение
     usage: /m <ник> <сообщение>
     permission: cloverchat.pm
+  cloverchat:
+    description: Инструменты модерации CloverChat
+    usage: /cloverchat inspect <message_id>
+    permission: cloverchat.command.inspect
   cloverchatreload:
     description: Перезагрузить CloverChat
     usage: /cloverchatreload confirm
@@ -32,6 +36,9 @@ permissions:
     default: op
   cloverchat.command.reload:
     description: Разрешает перезагружать плагин
+    default: op
+  cloverchat.command.inspect:
+    description: Разрешает просмотр сообщения по ID
     default: op
   cloverchat.commandcooldown.bypass:
     description: Обходит общий кулдаун команд

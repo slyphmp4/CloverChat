@@ -397,3 +397,62 @@ censor:
 #
 #
 # ----------------------------
+
+# ============================================================
+# MESSAGE INSPECTOR
+# ============================================================
+# LOCAL  - MySQL profile for local server/PC
+# REMOTE - MySQL profile for external/dedicated server
+#
+# /cloverchat inspect <message_id>
+# Permission: cloverchat.command.inspect
+
+message-inspector:
+  enabled: true
+
+  database:
+    mode: "LOCAL"
+    retry-connect-seconds: 15
+    health-check-interval-ticks: 1200
+
+    local:
+      host: "127.0.0.1"
+      port: 3306
+      database: "cloverchat"
+      username: "root"
+      password: "change_me"
+      use-ssl: false
+      allow-public-key-retrieval: true
+      server-timezone: "UTC"
+
+    remote:
+      host: "127.0.0.1"
+      port: 3306
+      database: "cloverchat"
+      username: "root"
+      password: "change_me"
+      use-ssl: false
+      allow-public-key-retrieval: true
+      server-timezone: "UTC"
+
+    hikari:
+      pool-name: "CloverChat-MessageInspector"
+      maximum-pool-size: 8
+      minimum-idle: 2
+      connection-timeout-ms: 10000
+      validation-timeout-ms: 5000
+      idle-timeout-ms: 600000
+      max-lifetime-ms: 1800000
+      keepalive-time-ms: 300000
+
+  writer:
+    flush-interval-ticks: 40
+    batch-size: 100
+    queue-limit: 10000
+
+  cache:
+    recent-ids-limit: 500
+
+  backup:
+    enabled: true
+    folder: "backups/message-inspector"
