@@ -1,68 +1,197 @@
+# ============================================================
+# CloverChat - main config
+# Author: slyphmp4
+# ============================================================
+#
+# Этот конфиг сделан с большим количеством свободного места,
+# чтобы вам было удобно оставлять свои заметки и пояснения.
+#
+# Ниже почти в каждом разделе есть блок:
+# "Ваши заметки"
+#
+# Можете спокойно писать там что угодно.
+#
+# ============================================================
+
+
+# ============================================================
+# GENERAL
+# ============================================================
+
+# HEX colors support in texts like: &FF0000
 hex-colors: true
 
+# Active language folder from: langs/<language>
+# Available now: ru, ua, en, de
 language: "ru"
 
+# ----------------------------
+# Ваши заметки (GENERAL)
+#
+#
+#
+# ----------------------------
+
+
+# ============================================================
+# UPDATE CHECKER
+# ============================================================
+
 update-checker:
+  # true  - проверка обновлений включена
+  # false - проверка обновлений выключена
   enabled: true
 
+# ----------------------------
+# Ваши заметки (UPDATE CHECKER)
+#
+#
+#
+# ----------------------------
+
+
+# ============================================================
+# VELOCITY PROXY SYNC
+# ============================================================
 # Cross-server chat sync through Velocity proxy.
-# Requirement in velocity.toml:
+#
+# Требование в velocity.toml:
 # bungee-plugin-message-channel = true
 #
-# Setup steps:
-# 1) Put CloverChat on every backend server behind Velocity.
-# 2) Set proxy-sync.enabled: true on every server.
-# 3) Set unique proxy-sync.server-id for each backend server.
-# 4) Keep the same proxy-sync.subchannel on all servers.
-# 5) Choose which chat modes to sync in proxy-sync.sync-modes.
+# Быстрый старт:
+# 1) Установите CloverChat на каждый backend-сервер.
+# 2) Включите proxy-sync.enabled: true на всех серверах.
+# 3) Укажите уникальный proxy-sync.server-id для каждого сервера.
+# 4) Оставьте одинаковый proxy-sync.subchannel на всех серверах.
+# 5) Выберите нужные режимы в proxy-sync.sync-modes.
+
 proxy-sync:
   enabled: false
+
+  # Уникальное имя этого backend-сервера
   server-id: "survival"
+
+  # Куда отправлять: ALL или конкретное имя backend-сервера
   target-server: "ALL"
+
+  # Одинаковый subchannel на всех backend-серверах
   subchannel: "CloverChatSync"
+
+  # Время хранения ID сообщений для защиты от дублей
   dedup-cache-seconds: 120
+
+  # Подробные логи синхронизации
   debug-log: false
+
   sync-modes:
+    # Синхронизация глобального чата
     global: true
+
+    # Синхронизация групповых каналов
     group: true
+
+    # Синхронизация локального чата
     local: false
+
   server-tag:
+    # Добавлять префикс сервера у входящих сообщений
     enabled: true
+
+    # %server% = server-id источника
     format: "&#65798F[&#AFCFFF%server%&#65798F] "
 
+# ----------------------------
+# Ваши заметки (VELOCITY)
+#
+#
+#
+# ----------------------------
+
+
+# ============================================================
+# CHAT PLACEHOLDERS
+# ============================================================
+
+# Плейсхолдеры имени, которые CloverChat может подхватывать
+# Первый рабочий плейсхолдер в формате будет использоваться
 chat-name-placeholders:
   - "%player_name%"
   - "%cloverrep_nick%"
 
+# Плейсхолдеры репутации
 chat-reputation-placeholders:
   - "%cloverrep_reputation%"
 
+# ----------------------------
+# Ваши заметки (PLACEHOLDERS)
+#
+#
+#
+# ----------------------------
+
+
+# ============================================================
+# REPUTATION HOVER
+# ============================================================
+
 reputation-hover:
   enabled: true
+
+  # Команда только подставляется в чат (не выполняется)
   suggest-command: "/rep "
+
+# ----------------------------
+# Ваши заметки (REPUTATION HOVER)
+#
+#
+#
+# ----------------------------
+
+
+# ============================================================
+# LOCAL / GLOBAL CHAT
+# ============================================================
 
 local-chat:
   enabled: true
+
+  # Радиус локального чата в блоках
   radius: 70
 
 global-chat:
   enabled: true
+
+  # Префикс глобального сообщения, например: !привет
   prefix: "!"
 
-# Group chat channels (ready preset)
-# Quick start:
-# 1) Keep group-chat.enabled: true
-# 2) Give rights for the needed channel:
+# ----------------------------
+# Ваши заметки (LOCAL/GLOBAL)
+#
+#
+#
+# ----------------------------
+
+
+# ============================================================
+# GROUP CHAT CHANNELS
+# ============================================================
+# Готовый пример каналов.
+#
+# Как пользоваться:
+# 1) Оставьте group-chat.enabled: true
+# 2) Выдайте права для нужного канала:
 #    cloverchat.channel.<channel>.send
 #    cloverchat.channel.<channel>.view
-# 3) Player writes message with channel prefix:
-#    @a test  -> admin channel
-#    @m test  -> moderator channel
-#    @v test  -> vip channel
-#    @b test  -> builder channel
-# 4) Longest prefix wins if more than one prefix matches
+# 3) Пишите сообщение с префиксом канала:
+#    @a текст  -> admin
+#    @m текст  -> moderator
+#    @v текст  -> vip
+#    @b текст  -> builder
+# 4) Если подходит несколько префиксов, победит самый длинный.
+
 group-chat:
   enabled: true
+
   channels:
     admin:
       enabled: true
@@ -70,18 +199,21 @@ group-chat:
       display-name: "Admin"
       send-permission: "cloverchat.channel.admin.send"
       view-permission: "cloverchat.channel.admin.view"
+
     moderator:
       enabled: true
       prefix: "@m "
       display-name: "Moderator"
       send-permission: "cloverchat.channel.moderator.send"
       view-permission: "cloverchat.channel.moderator.view"
+
     vip:
       enabled: true
       prefix: "@v "
       display-name: "VIP"
       send-permission: "cloverchat.channel.vip.send"
       view-permission: "cloverchat.channel.vip.view"
+
     builder:
       enabled: true
       prefix: "@b "
@@ -89,40 +221,146 @@ group-chat:
       send-permission: "cloverchat.channel.builder.send"
       view-permission: "cloverchat.channel.builder.view"
 
+# ----------------------------
+# Ваши заметки (GROUP CHAT)
+#
+#
+#
+# ----------------------------
+
+
+# ============================================================
+# PRIVATE MESSAGES
+# ============================================================
+
 private-chat:
   enabled: true
+
+  # Кулдаун между ЛС-командами (/m)
   cooldown-seconds: 5
+
+  # Звук входящего личного сообщения
   notification-sound: "minecraft:block.note_block.pling"
 
 quick-pm:
   enabled: true
+
+  # true  - ЛС по ПКМ только при зажатом Shift
+  # false - ЛС по ПКМ без Shift
   require-sneak: false
+
+  # Подстановка команды в чат
   suggest-command: "/m %target_name% "
 
+# ----------------------------
+# Ваши заметки (PRIVATE MESSAGES)
+#
+#
+#
+# ----------------------------
+
+
+# ============================================================
+# MENTIONS
+# ============================================================
+
 mention:
+  # Звук при упоминании игрока: @nick
   sound: "minecraft:block.note_block.pling"
+
+# ----------------------------
+# Ваши заметки (MENTIONS)
+#
+#
+#
+# ----------------------------
+
+
+# ============================================================
+# CHAT ABOVE HEAD
+# ============================================================
 
 chat-above-head:
   enabled: true
+
+  # Время отображения сообщения над головой
   duration-seconds: 4
+
+  # Высота над игроком
   y-offset: 2.25
+
+  # Максимальная длина текста над головой
   max-length: 72
+
+  # Комбо-счетчик, если игрок быстро пишет несколько сообщений
   combo-enabled: true
+
+# ----------------------------
+# Ваши заметки (CHAT ABOVE HEAD)
+#
+#
+#
+# ----------------------------
+
+
+# ============================================================
+# HOVER FEATURES
+# ============================================================
 
 prefix-hover:
   enabled: true
 
 message-hover:
   enabled: true
+
+  # Нажатие по сообщению копирует message ID
   copy-id-on-click: true
+
+  # Формат времени в hover у сообщения
   time-format: "HH:mm:ss"
+
+# ----------------------------
+# Ваши заметки (HOVER FEATURES)
+#
+#
+#
+# ----------------------------
+
+
+# ============================================================
+# LINKS
+# ============================================================
 
 links:
   enabled: true
 
+# ----------------------------
+# Ваши заметки (LINKS)
+#
+#
+#
+# ----------------------------
+
+
+# ============================================================
+# COMMAND COOLDOWN
+# ============================================================
+
 commands-cooldown:
   enabled: true
   seconds: 5
+
+# ----------------------------
+# Ваши заметки (COMMAND COOLDOWN)
+#
+#
+#
+# ----------------------------
+
+
+# ============================================================
+# JOIN / LEAVE
+# ============================================================
 
 join-message:
   enabled: true
@@ -130,10 +368,32 @@ join-message:
 leave-message:
   enabled: true
 
+# ----------------------------
+# Ваши заметки (JOIN/LEAVE)
+#
+#
+#
+# ----------------------------
+
+
+# ============================================================
+# CENSOR
+# ============================================================
+
 censor:
   enabled: true
+
+  # Слова-исключения для цензуры
+  # Проверка идет по отдельным словам
   words:
     - "херня"
     - "хрен"
     - "дурак"
     - "дура"
+
+# ----------------------------
+# Ваши заметки (CENSOR)
+#
+#
+#
+# ----------------------------
