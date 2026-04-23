@@ -51,7 +51,8 @@ public final class MessageAuditService {
     private volatile long lastConnectionErrorLogMillis;
     private volatile long lastInsertErrorLogMillis;
     private volatile long lastBackupErrorLogMillis;
-    private volatile String activeProfileName = "LOCAL";
+    private volatile String activeProfileName = "LOCAL-SQLITE";
+    private volatile DatabaseDialect activeDialect = DatabaseDialect.SQLITE;
 
     public MessageAuditService(CloverChatPlugin plugin) {
         this.plugin = plugin;
@@ -425,12 +426,38 @@ public final class MessageAuditService {
     private HikariDataSource createDataSource() {
         String mode = plugin.configuration().getString("message-inspector.database.mode", "LOCAL");
         String normalizedMode = mode == null ? "LOCAL" : mode.trim().toUpperCase(Locale.ROOT);
-        if (!normalizedMode.equals("REMOTE")) {
-            normalizedMode = "LOCAL";
+        if (normalizedMode.equals("REMOTE")) {
+            activeProfileName = "REMOTE-MYSQL";
+            activeDialect = DatabaseDialect.MYSQL;
+            return createRemoteMySqlDataSource();
         }
-        activeProfileName = normalizedMode;
+        activeProfileName = "LOCAL-SQLITE";
+        activeDialect = DatabaseDialect.SQLITE;
+        return createLocalSqliteDataSource();
+    }
 
-        String basePath = "message-inspector.database." + normalizedMode.toLowerCase(Locale.ROOT);
+    private HikariDataSource createLocalSqliteDataSource() {
+        File localDatabaseFile = resolveLocalDatabaseFile();
+        String jdbcUrl = buildSqliteJdbcUrl(localDatabaseFile);
+        String poolName = plugin.configuration().getString("message-inspector.database.hikari.pool-name", "CloverChat-MessageInspector");
+
+        HikariConfig hikariConfig = new HikariConfig();
+        hikariConfig.setPoolName(poolName + "-SQLite");
+        hikariConfig.setJdbcUrl(jdbcUrl);
+        hikariConfig.setMaximumPoolSize(1);
+        hikariConfig.setMinimumIdle(1);
+        hikariConfig.setConnectionTimeout(Math.max(3000L, plugin.configuration().getLong("message-inspector.database.hikari.connection-timeout-ms", 10000L)));
+        hikariConfig.setValidationTimeout(Math.max(1000L, plugin.configuration().getLong("message-inspector.database.hikari.validation-timeout-ms", 5000L)));
+        hikariConfig.setInitializationFailTimeout(-1L);
+        hikariConfig.setConnectionTestQuery("SELECT 1");
+        hikariConfig.setIdleTimeout(0L);
+        hikariConfig.setMaxLifetime(0L);
+        hikariConfig.setKeepaliveTime(0L);
+        return new HikariDataSource(hikariConfig);
+    }
+
+    private HikariDataSource createRemoteMySqlDataSource() {
+        String basePath = "message-inspector.database.remote";
         String host = plugin.configuration().getString(basePath + ".host", "127.0.0.1");
         int port = plugin.configuration().getInt(basePath + ".port", 3306);
         String database = plugin.configuration().getString(basePath + ".database", "cloverchat");
@@ -439,8 +466,7 @@ public final class MessageAuditService {
         boolean useSsl = plugin.configuration().getBoolean(basePath + ".use-ssl", false);
         boolean allowPublicKeyRetrieval = plugin.configuration().getBoolean(basePath + ".allow-public-key-retrieval", true);
         String timezone = plugin.configuration().getString(basePath + ".server-timezone", "UTC");
-
-        String jdbcUrl = buildJdbcUrl(host, port, database, useSsl, allowPublicKeyRetrieval, timezone);
+        String jdbcUrl = buildMySqlJdbcUrl(host, port, database, useSsl, allowPublicKeyRetrieval, timezone);
 
         HikariConfig hikariConfig = new HikariConfig();
         hikariConfig.setPoolName(plugin.configuration().getString("message-inspector.database.hikari.pool-name", "CloverChat-MessageInspector"));
@@ -462,11 +488,10 @@ public final class MessageAuditService {
         hikariConfig.addDataSourceProperty("useServerPrepStmts", "true");
         hikariConfig.addDataSourceProperty("rewriteBatchedStatements", "true");
         hikariConfig.addDataSourceProperty("tcpKeepAlive", "true");
-
         return new HikariDataSource(hikariConfig);
     }
 
-    private String buildJdbcUrl(
+    private String buildMySqlJdbcUrl(
             String host,
             int port,
             String database,
@@ -486,69 +511,95 @@ public final class MessageAuditService {
                 + "&serverTimezone=" + resolvedTimezone;
     }
 
-    private void createTableIfNeeded(HikariDataSource source) throws Exception {
-        String sql = "CREATE TABLE IF NOT EXISTS " + TABLE_NAME + " ("
-                + "id BIGINT NOT NULL AUTO_INCREMENT,"
-                + "message_id VARCHAR(80) NOT NULL,"
-                + "created_at BIGINT NOT NULL,"
-                + "message_time VARCHAR(40) NOT NULL,"
-                + "server_id VARCHAR(80) NOT NULL,"
-                + "player_uuid VARCHAR(40) NOT NULL,"
-                + "player_name VARCHAR(64) NOT NULL,"
-                + "player_display_name VARCHAR(255) NOT NULL,"
-                + "player_group_name VARCHAR(120) NOT NULL,"
-                + "player_prefix TEXT,"
-                + "player_reputation VARCHAR(120) NOT NULL,"
-                + "chat_mode VARCHAR(20) NOT NULL,"
-                + "chat_type_name VARCHAR(120) NOT NULL,"
-                + "group_channel VARCHAR(120) NOT NULL,"
-                + "world_name VARCHAR(120) NOT NULL,"
-                + "pos_x DOUBLE NOT NULL,"
-                + "pos_y DOUBLE NOT NULL,"
-                + "pos_z DOUBLE NOT NULL,"
-                + "raw_input TEXT NOT NULL,"
-                + "chat_message TEXT NOT NULL,"
-                + "final_message_json LONGTEXT NOT NULL,"
-                + "view_permission VARCHAR(255) NOT NULL,"
-                + "PRIMARY KEY (id),"
-                + "UNIQUE KEY uq_message_id (message_id),"
-                + "KEY idx_player_name (player_name),"
-                + "KEY idx_created_at (created_at)"
-                + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+    private String buildSqliteJdbcUrl(File databaseFile) {
+        String path = databaseFile.getAbsolutePath().replace("\\", "/");
+        return "jdbc:sqlite:" + path + "?busy_timeout=5000&journal_mode=WAL&synchronous=NORMAL&foreign_keys=on";
+    }
 
+    private File resolveLocalDatabaseFile() {
+        String configuredPath = plugin.configuration().getString("message-inspector.database.local.file", "storage/message-inspector.db");
+        if (configuredPath == null || configuredPath.isBlank()) {
+            configuredPath = "storage/message-inspector.db";
+        }
+
+        File file = new File(configuredPath);
+        if (!file.isAbsolute()) {
+            file = new File(plugin.getDataFolder(), configuredPath);
+        }
+
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+        }
+
+        return file;
+    }
+
+    private void createTableIfNeeded(HikariDataSource source) throws Exception {
         try (Connection connection = source.getConnection();
              Statement statement = connection.createStatement()) {
-            statement.execute(sql);
+            if (activeDialect == DatabaseDialect.SQLITE) {
+                statement.execute("CREATE TABLE IF NOT EXISTS " + TABLE_NAME + " ("
+                        + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                        + "message_id TEXT NOT NULL UNIQUE,"
+                        + "created_at INTEGER NOT NULL,"
+                        + "message_time TEXT NOT NULL,"
+                        + "server_id TEXT NOT NULL,"
+                        + "player_uuid TEXT NOT NULL,"
+                        + "player_name TEXT NOT NULL,"
+                        + "player_display_name TEXT NOT NULL,"
+                        + "player_group_name TEXT NOT NULL,"
+                        + "player_prefix TEXT,"
+                        + "player_reputation TEXT NOT NULL,"
+                        + "chat_mode TEXT NOT NULL,"
+                        + "chat_type_name TEXT NOT NULL,"
+                        + "group_channel TEXT NOT NULL,"
+                        + "world_name TEXT NOT NULL,"
+                        + "pos_x REAL NOT NULL,"
+                        + "pos_y REAL NOT NULL,"
+                        + "pos_z REAL NOT NULL,"
+                        + "raw_input TEXT NOT NULL,"
+                        + "chat_message TEXT NOT NULL,"
+                        + "final_message_json TEXT NOT NULL,"
+                        + "view_permission TEXT NOT NULL"
+                        + ")");
+                statement.execute("CREATE INDEX IF NOT EXISTS idx_cloverchat_audit_player_name ON " + TABLE_NAME + "(player_name)");
+                statement.execute("CREATE INDEX IF NOT EXISTS idx_cloverchat_audit_created_at ON " + TABLE_NAME + "(created_at)");
+            } else {
+                statement.execute("CREATE TABLE IF NOT EXISTS " + TABLE_NAME + " ("
+                        + "id BIGINT NOT NULL AUTO_INCREMENT,"
+                        + "message_id VARCHAR(80) NOT NULL,"
+                        + "created_at BIGINT NOT NULL,"
+                        + "message_time VARCHAR(40) NOT NULL,"
+                        + "server_id VARCHAR(80) NOT NULL,"
+                        + "player_uuid VARCHAR(40) NOT NULL,"
+                        + "player_name VARCHAR(64) NOT NULL,"
+                        + "player_display_name VARCHAR(255) NOT NULL,"
+                        + "player_group_name VARCHAR(120) NOT NULL,"
+                        + "player_prefix TEXT,"
+                        + "player_reputation VARCHAR(120) NOT NULL,"
+                        + "chat_mode VARCHAR(20) NOT NULL,"
+                        + "chat_type_name VARCHAR(120) NOT NULL,"
+                        + "group_channel VARCHAR(120) NOT NULL,"
+                        + "world_name VARCHAR(120) NOT NULL,"
+                        + "pos_x DOUBLE NOT NULL,"
+                        + "pos_y DOUBLE NOT NULL,"
+                        + "pos_z DOUBLE NOT NULL,"
+                        + "raw_input TEXT NOT NULL,"
+                        + "chat_message TEXT NOT NULL,"
+                        + "final_message_json LONGTEXT NOT NULL,"
+                        + "view_permission VARCHAR(255) NOT NULL,"
+                        + "PRIMARY KEY (id),"
+                        + "UNIQUE KEY uq_message_id (message_id),"
+                        + "KEY idx_player_name (player_name),"
+                        + "KEY idx_created_at (created_at)"
+                        + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            }
         }
     }
 
     private void insertBatch(List<ChatMessageAuditRecord> batch) throws Exception {
-        String sql = "INSERT INTO " + TABLE_NAME + " ("
-                + "message_id, created_at, message_time, server_id, player_uuid, player_name, player_display_name, "
-                + "player_group_name, player_prefix, player_reputation, chat_mode, chat_type_name, group_channel, world_name, "
-                + "pos_x, pos_y, pos_z, raw_input, chat_message, final_message_json, view_permission"
-                + ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
-                + "ON DUPLICATE KEY UPDATE "
-                + "created_at = VALUES(created_at), "
-                + "message_time = VALUES(message_time), "
-                + "server_id = VALUES(server_id), "
-                + "player_uuid = VALUES(player_uuid), "
-                + "player_name = VALUES(player_name), "
-                + "player_display_name = VALUES(player_display_name), "
-                + "player_group_name = VALUES(player_group_name), "
-                + "player_prefix = VALUES(player_prefix), "
-                + "player_reputation = VALUES(player_reputation), "
-                + "chat_mode = VALUES(chat_mode), "
-                + "chat_type_name = VALUES(chat_type_name), "
-                + "group_channel = VALUES(group_channel), "
-                + "world_name = VALUES(world_name), "
-                + "pos_x = VALUES(pos_x), "
-                + "pos_y = VALUES(pos_y), "
-                + "pos_z = VALUES(pos_z), "
-                + "raw_input = VALUES(raw_input), "
-                + "chat_message = VALUES(chat_message), "
-                + "final_message_json = VALUES(final_message_json), "
-                + "view_permission = VALUES(view_permission)";
+        String sql = activeDialect == DatabaseDialect.SQLITE ? sqliteUpsertSql() : mySqlUpsertSql();
 
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -578,6 +629,64 @@ public final class MessageAuditService {
             }
             statement.executeBatch();
         }
+    }
+
+    private String mySqlUpsertSql() {
+        return "INSERT INTO " + TABLE_NAME + " ("
+                + "message_id, created_at, message_time, server_id, player_uuid, player_name, player_display_name, "
+                + "player_group_name, player_prefix, player_reputation, chat_mode, chat_type_name, group_channel, world_name, "
+                + "pos_x, pos_y, pos_z, raw_input, chat_message, final_message_json, view_permission"
+                + ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                + "ON DUPLICATE KEY UPDATE "
+                + "created_at = VALUES(created_at), "
+                + "message_time = VALUES(message_time), "
+                + "server_id = VALUES(server_id), "
+                + "player_uuid = VALUES(player_uuid), "
+                + "player_name = VALUES(player_name), "
+                + "player_display_name = VALUES(player_display_name), "
+                + "player_group_name = VALUES(player_group_name), "
+                + "player_prefix = VALUES(player_prefix), "
+                + "player_reputation = VALUES(player_reputation), "
+                + "chat_mode = VALUES(chat_mode), "
+                + "chat_type_name = VALUES(chat_type_name), "
+                + "group_channel = VALUES(group_channel), "
+                + "world_name = VALUES(world_name), "
+                + "pos_x = VALUES(pos_x), "
+                + "pos_y = VALUES(pos_y), "
+                + "pos_z = VALUES(pos_z), "
+                + "raw_input = VALUES(raw_input), "
+                + "chat_message = VALUES(chat_message), "
+                + "final_message_json = VALUES(final_message_json), "
+                + "view_permission = VALUES(view_permission)";
+    }
+
+    private String sqliteUpsertSql() {
+        return "INSERT INTO " + TABLE_NAME + " ("
+                + "message_id, created_at, message_time, server_id, player_uuid, player_name, player_display_name, "
+                + "player_group_name, player_prefix, player_reputation, chat_mode, chat_type_name, group_channel, world_name, "
+                + "pos_x, pos_y, pos_z, raw_input, chat_message, final_message_json, view_permission"
+                + ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                + "ON CONFLICT(message_id) DO UPDATE SET "
+                + "created_at = excluded.created_at, "
+                + "message_time = excluded.message_time, "
+                + "server_id = excluded.server_id, "
+                + "player_uuid = excluded.player_uuid, "
+                + "player_name = excluded.player_name, "
+                + "player_display_name = excluded.player_display_name, "
+                + "player_group_name = excluded.player_group_name, "
+                + "player_prefix = excluded.player_prefix, "
+                + "player_reputation = excluded.player_reputation, "
+                + "chat_mode = excluded.chat_mode, "
+                + "chat_type_name = excluded.chat_type_name, "
+                + "group_channel = excluded.group_channel, "
+                + "world_name = excluded.world_name, "
+                + "pos_x = excluded.pos_x, "
+                + "pos_y = excluded.pos_y, "
+                + "pos_z = excluded.pos_z, "
+                + "raw_input = excluded.raw_input, "
+                + "chat_message = excluded.chat_message, "
+                + "final_message_json = excluded.final_message_json, "
+                + "view_permission = excluded.view_permission";
     }
 
     private void writeBackup(List<ChatMessageAuditRecord> batch) {
@@ -702,5 +811,10 @@ public final class MessageAuditService {
         }
         lastBackupErrorLogMillis = now;
         plugin.getLogger().warning("[MessageInspector] " + message);
+    }
+
+    private enum DatabaseDialect {
+        SQLITE,
+        MYSQL
     }
 }

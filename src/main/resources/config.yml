@@ -401,8 +401,8 @@ censor:
 # ============================================================
 # MESSAGE INSPECTOR
 # ============================================================
-# LOCAL  - MySQL profile for local server/PC
-# REMOTE - MySQL profile for external/dedicated server
+# LOCAL  - built-in SQLite file in plugin folder
+# REMOTE - external MySQL database
 #
 # /cloverchat inspect <message_id>
 # Permission: cloverchat.command.inspect
@@ -416,14 +416,7 @@ message-inspector:
     health-check-interval-ticks: 1200
 
     local:
-      host: "127.0.0.1"
-      port: 3306
-      database: "cloverchat"
-      username: "root"
-      password: "change_me"
-      use-ssl: false
-      allow-public-key-retrieval: true
-      server-timezone: "UTC"
+      file: "storage/message-inspector.db"
 
     remote:
       host: "127.0.0.1"
