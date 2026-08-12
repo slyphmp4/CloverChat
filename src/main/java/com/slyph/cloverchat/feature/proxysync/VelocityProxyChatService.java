@@ -11,7 +11,6 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -55,13 +54,8 @@ public final class VelocityProxyChatService implements PluginMessageListener {
         start();
     }
 
-    public void forwardMessage(Player sender, String messageId, String modeName, String viewPermission, Component message) {
+    public void forwardGlobalMessage(Player sender, String messageId, Component message) {
         if (!active || message == null || messageId == null || messageId.isBlank()) {
-            return;
-        }
-
-        SyncMode mode = parseMode(modeName);
-        if (mode == null || !isModeEnabled(mode)) {
             return;
         }
 
@@ -73,8 +67,8 @@ public final class VelocityProxyChatService implements PluginMessageListener {
                 PAYLOAD_VERSION,
                 sourceServer,
                 messageId,
-                mode.name(),
-                viewPermission == null ? "" : viewPermission,
+                "GLOBAL",
+                "",
                 payloadJson
         );
 
@@ -94,7 +88,7 @@ public final class VelocityProxyChatService implements PluginMessageListener {
         }
 
         carrier.sendPluginMessage(plugin, BUNGEE_CHANNEL, transportData);
-        logDebug("Forwarded proxy chat message id=" + messageId + " mode=" + mode.name() + " source=" + sourceServer);
+        logDebug("Forwarded global chat message id=" + messageId + " source=" + sourceServer);
     }
 
     @Override
@@ -125,8 +119,7 @@ public final class VelocityProxyChatService implements PluginMessageListener {
                 return;
             }
 
-            SyncMode mode = parseMode(payload.mode);
-            if (mode == null || !isModeEnabled(mode)) {
+            if (!"GLOBAL".equalsIgnoreCase(payload.mode)) {
                 return;
             }
 
@@ -142,26 +135,15 @@ public final class VelocityProxyChatService implements PluginMessageListener {
             Component component = serializer.deserialize(payload.componentJson);
             Component tagged = applyServerTag(payload.sourceServer, component);
             plugin.scheduler().runGlobal(() -> {
-                dispatchIncoming(mode, payload.viewPermission, tagged);
-                logDebug("Received proxy chat message id=" + payload.messageId + " mode=" + payload.mode + " source=" + payload.sourceServer);
+                dispatchIncoming(tagged);
+                logDebug("Received global chat message id=" + payload.messageId + " source=" + payload.sourceServer);
             });
         } catch (Exception exception) {
             logDebug("Failed to process proxy-sync message: " + exception.getMessage());
         }
     }
 
-    private void dispatchIncoming(SyncMode mode, String viewPermission, Component message) {
-        if (mode == SyncMode.GROUP) {
-            String permission = viewPermission == null ? "" : viewPermission;
-            for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-                if (!permission.isBlank() && !onlinePlayer.hasPermission(permission)) {
-                    continue;
-                }
-                onlinePlayer.sendMessage(message);
-            }
-            return;
-        }
-
+    private void dispatchIncoming(Component message) {
         for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
             onlinePlayer.sendMessage(message);
         }
@@ -285,37 +267,10 @@ public final class VelocityProxyChatService implements PluginMessageListener {
         return value;
     }
 
-    private SyncMode parseMode(String modeName) {
-        if (modeName == null || modeName.isBlank()) {
-            return null;
-        }
-        try {
-            return SyncMode.valueOf(modeName.trim().toUpperCase(Locale.ROOT));
-        } catch (Exception exception) {
-            return null;
-        }
-    }
-
-    private boolean isModeEnabled(SyncMode mode) {
-        if (mode == SyncMode.GLOBAL) {
-            return plugin.configuration().getBoolean("proxy-sync.sync-modes.global", true);
-        }
-        if (mode == SyncMode.GROUP) {
-            return plugin.configuration().getBoolean("proxy-sync.sync-modes.group", true);
-        }
-        return plugin.configuration().getBoolean("proxy-sync.sync-modes.local", false);
-    }
-
     private void logDebug(String message) {
         if (plugin.configuration().getBoolean("proxy-sync.debug-log", false)) {
             plugin.getLogger().info("[ProxySync] " + message);
         }
-    }
-
-    private enum SyncMode {
-        GLOBAL,
-        GROUP,
-        LOCAL
     }
 
     private static final class ProxyPayload {

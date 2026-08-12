@@ -134,7 +134,9 @@ public final class ChatListener implements Listener {
                 messageId
         );
         dispatchMessage(sender, chatRoute, finalMessage);
-        plugin.proxyChatSyncService().forwardMessage(sender, messageId, chatRoute.mode.name(), chatRoute.viewPermission, finalMessage);
+        if (chatRoute.mode == ChatMode.GLOBAL) {
+            plugin.proxyChatSyncService().forwardGlobalMessage(sender, messageId, finalMessage);
+        }
         plugin.headMessageService().show(sender, chatMessage);
         plugin.messageAuditService().trackMessage(buildAuditRecord(
                 sender,
