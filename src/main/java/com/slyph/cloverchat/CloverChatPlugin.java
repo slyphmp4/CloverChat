@@ -11,6 +11,7 @@ import com.slyph.cloverchat.feature.headmessage.HeadMessageService;
 import com.slyph.cloverchat.feature.messageinspect.MessageAuditService;
 import com.slyph.cloverchat.feature.proxysync.VelocityProxyChatService;
 import com.slyph.cloverchat.feature.updatechecker.UpdateCheckerService;
+import com.slyph.cloverchat.listener.CardboardChatBridge;
 import com.slyph.cloverchat.listener.ChatListener;
 import com.slyph.cloverchat.listener.CommandCooldownListener;
 import com.slyph.cloverchat.listener.JoinQuitListener;
@@ -72,6 +73,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         if (cardboardCompatibilityMode) {
             modernChatBridgeEnabled = false;
             getServer().getPluginManager().registerEvents(chatListener, this);
+            getServer().getPluginManager().registerEvents(new CardboardChatBridge(chatListener), this);
         } else {
             modernChatBridgeEnabled = new ModernChatBridge(this, chatListener).register();
             if (!modernChatBridgeEnabled) {
@@ -306,7 +308,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         String messageInspectorProfile = messageAuditService == null ? "-" : messageAuditService.activeProfileName();
         String schedulerMode = compatScheduler != null && compatScheduler.isFolia() ? "Folia" : "Paper/Spigot";
         String chatMode = cardboardCompatibilityMode
-                ? "AsyncPlayerChatEvent (Cardboard compatibility)"
+                ? "AsyncPlayerChatEvent + PlayerChatEvent fallback"
                 : (modernChatBridgeEnabled ? "AsyncChatEvent (1.19+)" : "AsyncPlayerChatEvent");
 
         getLogger().info("");
