@@ -1,20 +1,20 @@
 local-chat:
-  format: "&#20a688[&#40e7afʟ&#20a688] &#c0ffec• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#4f5b58→ &#d6fff7%message%"
+  format: "&#20a688[&#40e7afʟ&#20a688] &#c0ffec• %uperms_prefix% %cloverbadges_badge_spaced%%player_name% &8(%cloverrep_reputation%&8) &#4f5b58→ &#d6fff7%message%"
 
 global-chat:
-  format: "&#4ea62f[&#6de743ɢ&#4ea62f] &#d0ffc0• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#525b4f→ &#e0ffd6%message%"
+  format: "&#4ea62f[&#6de743ɢ&#4ea62f] &#d0ffc0• %uperms_prefix% %cloverbadges_badge_spaced%%player_name% &8(%cloverrep_reputation%&8) &#525b4f→ &#e0ffd6%message%"
 
 chat-types:
   local: "Локальный"
   global: "Глобальный"
 
 group-chat:
-  default-format: "&#6A6A9E[&#A5A5E6%channel%&#6A6A9E] &#ECECFF• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#565670→ &#F6F6FF%message%"
+  default-format: "&#6A6A9E[&#A5A5E6%channel%&#6A6A9E] &#ECECFF• %uperms_prefix% %cloverbadges_badge_spaced%%player_name% &8(%cloverrep_reputation%&8) &#565670→ &#F6F6FF%message%"
   formats:
-    admin: "&#8A2323[&#FF6464A&#8A2323] &#FFDADA• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#664949→ &#FFECEC%message%"
-    moderator: "&#266F8A[&#68D8FFM&#266F8A] &#DAF4FF• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#4A6266→ &#ECFAFF%message%"
-    vip: "&#8E6A17[&#FFD667V&#8E6A17] &#FFF3D6• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#665E4A→ &#FFF9EC%message%"
-    builder: "&#2B8A3D[&#6DFF87B&#2B8A3D] &#DAFFE1• %uperms_prefix% %player_name% &8(%cloverrep_reputation%&8) &#4A6650→ &#ECFFF0%message%"
+    admin: "&#8A2323[&#FF6464A&#8A2323] &#FFDADA• %uperms_prefix% %cloverbadges_badge_spaced%%player_name% &8(%cloverrep_reputation%&8) &#664949→ &#FFECEC%message%"
+    moderator: "&#266F8A[&#68D8FFM&#266F8A] &#DAF4FF• %uperms_prefix% %cloverbadges_badge_spaced%%player_name% &8(%cloverrep_reputation%&8) &#4A6266→ &#ECFAFF%message%"
+    vip: "&#8E6A17[&#FFD667V&#8E6A17] &#FFF3D6• %uperms_prefix% %cloverbadges_badge_spaced%%player_name% &8(%cloverrep_reputation%&8) &#665E4A→ &#FFF9EC%message%"
+    builder: "&#2B8A3D[&#6DFF87B&#2B8A3D] &#DAFFE1• %uperms_prefix% %cloverbadges_badge_spaced%%player_name% &8(%cloverrep_reputation%&8) &#4A6650→ &#ECFFF0%message%"
   no-permission-message:
     - "&7"
     - "&#ff6b6b✖ Ошибка  &#ffc1c1|  &#ff8f8fУ вас нет права писать в канал &#ffb8b8%channel%"
