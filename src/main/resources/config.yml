@@ -74,6 +74,12 @@ proxy-sync:
   # Уникальное имя этого backend-сервера
   server-id: "survival"
 
+  # Одинаковый секрет минимум из 32 символов на всех backend-серверах
+  # Рекомендуется не хранить секрет здесь, а задать переменную окружения:
+  # CLOVERCHAT_PROXY_SECRET
+  # Синхронизация не запустится с пустым или коротким секретом
+  shared-secret: ""
+
   # Куда отправлять: ALL или конкретное имя backend-сервера
   target-server: "ALL"
 
@@ -82,6 +88,12 @@ proxy-sync:
 
   # Время хранения ID сообщений для защиты от дублей
   dedup-cache-seconds: 120
+
+  # Максимальный возраст входящего сообщения
+  max-message-age-seconds: 45
+
+  # Максимальное количество ID в памяти для защиты от переполнения
+  max-dedup-entries: 10000
 
   # Подробные логи синхронизации
   debug-log: false
@@ -403,6 +415,10 @@ censor:
 message-inspector:
   enabled: true
 
+  # Сколько дней хранить записи в БД и JSONL-бекапы
+  # 0 - хранить без ограничения
+  retention-days: 90
+
   database:
     mode: "LOCAL"
     retry-connect-seconds: 15
@@ -415,10 +431,14 @@ message-inspector:
       host: "127.0.0.1"
       port: 3306
       database: "cloverchat"
+      # Можно задать через CLOVERCHAT_DB_USERNAME
       username: "root"
+      # Рекомендуется задать через CLOVERCHAT_DB_PASSWORD
       password: "change_me"
-      use-ssl: false
-      allow-public-key-retrieval: true
+      # DISABLED, PREFERRED, REQUIRED, VERIFY_CA или VERIFY_IDENTITY
+      ssl-mode: "VERIFY_IDENTITY"
+      # Включайте только если это действительно требуется вашей MySQL
+      allow-public-key-retrieval: false
       server-timezone: "UTC"
 
     hikari:
@@ -442,3 +462,4 @@ message-inspector:
   backup:
     enabled: true
     folder: "backups/message-inspector"
+    max-file-size-mb: 64

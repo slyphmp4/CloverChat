@@ -7,6 +7,7 @@ import com.slyph.cloverchat.command.completer.CloverChatTabCompleter;
 import com.slyph.cloverchat.command.completer.PrivateMessageTabCompleter;
 import com.slyph.cloverchat.command.completer.ReloadTabCompleter;
 import com.slyph.cloverchat.feature.automessage.AutoMessageService;
+import com.slyph.cloverchat.feature.censor.CensorService;
 import com.slyph.cloverchat.feature.headmessage.HeadMessageService;
 import com.slyph.cloverchat.feature.messageinspect.MessageAuditService;
 import com.slyph.cloverchat.feature.proxysync.VelocityProxyChatService;
@@ -47,6 +48,7 @@ public final class CloverChatPlugin extends JavaPlugin {
 
     private boolean placeholderApiHooked;
     private CompatScheduler compatScheduler;
+    private CensorService censorService;
     private HeadMessageService headMessageService;
     private MessageAuditService messageAuditService;
     private UpdateCheckerService updateCheckerService;
@@ -63,8 +65,9 @@ public final class CloverChatPlugin extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
         loadAdditionalConfigurations();
-        placeholderApiHooked = getServer().getPluginManager().getPlugin("PlaceholderAPI") != null;
+        placeholderApiHooked = getServer().getPluginManager().isPluginEnabled("PlaceholderAPI");
         compatScheduler = new CompatScheduler(this);
+        censorService = new CensorService(this);
         headMessageService = new HeadMessageService(this);
         messageAuditService = new MessageAuditService(this);
         updateCheckerService = new UpdateCheckerService(this);
@@ -161,6 +164,10 @@ public final class CloverChatPlugin extends JavaPlugin {
         return headMessageService;
     }
 
+    public CensorService censorService() {
+        return censorService;
+    }
+
     public MessageAuditService messageAuditService() {
         return messageAuditService;
     }
@@ -204,6 +211,9 @@ public final class CloverChatPlugin extends JavaPlugin {
     public void reloadPluginConfiguration() {
         reloadConfig();
         loadAdditionalConfigurations();
+        if (censorService != null) {
+            censorService.reload();
+        }
         if (updateCheckerService != null) {
             updateCheckerService.restart();
         }

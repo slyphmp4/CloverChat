@@ -48,12 +48,19 @@ public final class CloverChatCommand implements CommandExecutor {
         }
 
         String messageId = args[1].trim();
+        if (!messageId.matches("[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}")) {
+            sendList(sender, senderAsPlayer(sender), readList("inspect-messages.not-found", fallbackNotFound()));
+            return true;
+        }
         sendList(sender, senderAsPlayer(sender), readList("inspect-messages.loading", fallbackLoading()));
 
         plugin.messageAuditService().findByMessageIdAsync(
                 messageId,
-                record -> onInspectLoaded(sender, record),
-                throwable -> sendList(sender, senderAsPlayer(sender), readList("inspect-messages.error", fallbackError()))
+                record -> scheduleForSender(sender, () -> onInspectLoaded(sender, record)),
+                throwable -> scheduleForSender(
+                        sender,
+                        () -> sendList(sender, senderAsPlayer(sender), readList("inspect-messages.error", fallbackError()))
+                )
         );
         return true;
     }
@@ -61,6 +68,10 @@ public final class CloverChatCommand implements CommandExecutor {
     private void onInspectLoaded(CommandSender sender, ChatMessageAuditRecord record) {
         if (record == null) {
             sendList(sender, senderAsPlayer(sender), readList("inspect-messages.not-found", fallbackNotFound()));
+            return;
+        }
+        if (!canInspect(sender, record)) {
+            sendList(sender, senderAsPlayer(sender), readList("inspect-messages.restricted", fallbackRestricted()));
             return;
         }
 
@@ -71,6 +82,27 @@ public final class CloverChatCommand implements CommandExecutor {
 
     private Player senderAsPlayer(CommandSender sender) {
         return sender instanceof Player ? (Player) sender : null;
+    }
+
+    private void scheduleForSender(CommandSender sender, Runnable runnable) {
+        Player player = senderAsPlayer(sender);
+        if (player == null) {
+            plugin.scheduler().runGlobal(runnable);
+            return;
+        }
+        plugin.scheduler().runEntity(player, () -> {
+            if (player.isOnline()) {
+                runnable.run();
+            }
+        });
+    }
+
+    private boolean canInspect(CommandSender sender, ChatMessageAuditRecord record) {
+        if (!(sender instanceof Player) || sender.hasPermission("cloverchat.command.inspect.all")) {
+            return true;
+        }
+        String permission = record.viewPermission();
+        return permission == null || permission.isBlank() || sender.hasPermission(permission);
     }
 
     private List<String> readList(String path, List<String> fallback) {
@@ -95,12 +127,11 @@ public final class CloverChatCommand implements CommandExecutor {
             Map<String, String> placeholders
     ) {
         for (String line : lines) {
-            String replaced = line;
+            String replaced = plugin.applyPlaceholders(context, line);
             for (Map.Entry<String, String> entry : placeholders.entrySet()) {
                 replaced = replaced.replace(entry.getKey(), entry.getValue());
             }
-            String resolved = plugin.applyPlaceholders(context, replaced);
-            sender.sendMessage(plugin.deserializeColored(resolved));
+            sender.sendMessage(plugin.deserializeColored(replaced));
         }
     }
 
@@ -148,6 +179,14 @@ public final class CloverChatCommand implements CommandExecutor {
         return Arrays.asList(
                 "&7",
                 "&#ff6b6b✖ Ошибка  &#ffc1c1|  &#ff8f8fНе удалось получить данные из базы",
+                "&7"
+        );
+    }
+
+    private List<String> fallbackRestricted() {
+        return Arrays.asList(
+                "&7",
+                "&#ff6b6b✖ Ошибка  &#ffc1c1|  &#ff8f8fУ вас нет доступа к этому каналу сообщений",
                 "&7"
         );
     }

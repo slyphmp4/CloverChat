@@ -130,6 +130,10 @@ inspect-messages:
     - "&7"
     - "&#ff6b6b✖ Error  &#ffc1c1|  &#ff8f8fFailed to read message from database"
     - "&7"
+  restricted:
+    - "&7"
+    - "&#ff6b6b✖ Error  &#ffc1c1|  &#ff8f8fYou cannot inspect messages from this channel"
+    - "&7"
   result:
     - "&7"
     - "&#24e765★ Inspect  &#89ffa6|  &#24e765ID: &#d6fff7%message_id%"

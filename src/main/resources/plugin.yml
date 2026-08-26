@@ -40,6 +40,9 @@ permissions:
   cloverchat.command.inspect:
     description: Разрешает просмотр сообщения по ID
     default: op
+  cloverchat.command.inspect.all:
+    description: Разрешает просмотр сообщений закрытых групповых каналов
+    default: op
   cloverchat.commandcooldown.bypass:
     description: Обходит общий кулдаун команд
     default: op

@@ -8,16 +8,21 @@ on:
     branches:
       - master
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
           java-version: "25"
@@ -27,7 +32,18 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build
-        run: ./gradlew build --no-daemon
+        run: ./gradlew build --no-daemon --dependency-verification=strict
+
+      - name: Prepare Build Metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd build/libs
+            sha256sum CloverChat.jar > CloverChat.jar.sha256
+          )
+          ./gradlew dependencies --configuration runtimeClasspath --no-daemon --dependency-verification=strict \
+            > build/libs/CloverChat-dependencies.txt
 
       - name: Smoke Test Paper 26.2
         shell: bash
@@ -36,15 +52,21 @@ jobs:
           SMOKE_DIR="$RUNNER_TEMP/cloverchat-paper-26.2"
           PLUGIN_VERSION=$(grep '^pluginVersion=' gradle.properties | cut -d'=' -f2)
           mkdir -p "$SMOKE_DIR/plugins"
-          PAPER_URL=$(curl -fsSL \
+          PAPER_META=$(curl -fsSL \
             -H "User-Agent: CloverChat-CI/$PLUGIN_VERSION (slyphmp4@users.noreply.github.com)" \
-            "https://fill.papermc.io/v3/projects/paper/versions/26.2/builds" \
-            | jq -r '[.[] | select(.channel == "STABLE")][0].downloads["server:default"].url // empty')
+            "https://fill.papermc.io/v3/projects/paper/versions/26.2/builds")
+          PAPER_URL=$(jq -r '[.[] | select(.channel == "STABLE")][0].downloads["server:default"].url // empty' \
+            <<< "$PAPER_META")
+          PAPER_SHA256=$(jq -r '[.[] | select(.channel == "STABLE")][0].downloads["server:default"].checksums.sha256 // empty' \
+            <<< "$PAPER_META")
           test -n "$PAPER_URL"
+          test "$PAPER_SHA256" != "null"
+          test -n "$PAPER_SHA256"
           curl -fsSL \
             -H "User-Agent: CloverChat-CI/$PLUGIN_VERSION (slyphmp4@users.noreply.github.com)" \
             "$PAPER_URL" \
             -o "$SMOKE_DIR/paper.jar"
+          printf '%s  %s\n' "$PAPER_SHA256" "$SMOKE_DIR/paper.jar" | sha256sum --check --strict
           cp build/libs/CloverChat.jar "$SMOKE_DIR/plugins/CloverChat.jar"
           printf 'eula=true\n' > "$SMOKE_DIR/eula.txt"
           printf '%s\n' \
@@ -83,8 +105,11 @@ jobs:
 
       - name: Upload Artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: CloverChat-build
-          path: build/libs/*.jar
+          path: |
+            build/libs/CloverChat.jar
+            build/libs/CloverChat.jar.sha256
+            build/libs/CloverChat-dependencies.txt
           if-no-files-found: ignore

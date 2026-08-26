@@ -37,14 +37,27 @@ public final class ReloadCommand implements CommandExecutor {
             return true;
         }
 
-        plugin.reloadPluginConfiguration();
-
-        List<String> successLines = plugin.messages().getStringList("system-messages.reload-success");
-        if (successLines.isEmpty()) {
-            successLines = Arrays.asList("&7", "&aCloverChat успешно перезагружен", "&7");
+        Runnable reloadTask = () -> {
+            plugin.reloadPluginConfiguration();
+            Player player = sender instanceof Player ? (Player) sender : null;
+            Runnable responseTask = () -> {
+                List<String> successLines = plugin.messages().getStringList("system-messages.reload-success");
+                if (successLines.isEmpty()) {
+                    successLines = Arrays.asList("&7", "&aCloverChat успешно перезагружен", "&7");
+                }
+                plugin.sendConfiguredLines(sender, player, successLines);
+            };
+            if (player == null) {
+                responseTask.run();
+            } else {
+                plugin.scheduler().runEntity(player, responseTask);
+            }
+        };
+        if (plugin.scheduler().isFolia()) {
+            plugin.scheduler().runGlobal(reloadTask);
+        } else {
+            reloadTask.run();
         }
-
-        plugin.sendConfiguredLines(sender, sender instanceof Player ? (Player) sender : null, successLines);
         return true;
     }
 }

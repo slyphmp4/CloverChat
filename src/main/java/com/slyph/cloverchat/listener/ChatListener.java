@@ -1,6 +1,7 @@
 package com.slyph.cloverchat.listener;
 
 import com.slyph.cloverchat.CloverChatPlugin;
+import com.slyph.cloverchat.feature.messageinspect.MessageIdGenerator;
 import com.slyph.cloverchat.feature.messageinspect.model.ChatMessageAuditRecord;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.sound.Sound;
@@ -26,7 +27,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.time.LocalDateTime;
@@ -36,7 +36,6 @@ public final class ChatListener implements Listener {
 
     private static final Pattern LINK_PATTERN = Pattern.compile("(https?://\\S+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern MENTION_PATTERN = Pattern.compile("@([A-Za-z0-9_]{3,16})");
-    private static final AtomicLong MESSAGE_COUNTER = new AtomicLong(0L);
     private static final GsonComponentSerializer MESSAGE_SERIALIZER = GsonComponentSerializer.gson();
 
     private final CloverChatPlugin plugin;
@@ -48,17 +47,15 @@ public final class ChatListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlayerChat(AsyncPlayerChatEvent event) {
         event.setCancelled(true);
-        handleIncomingChat(event.getPlayer().getUniqueId(), event.getMessage());
+        handleIncomingChat(event.getPlayer(), event.getMessage());
     }
 
-    public void handleIncomingChat(UUID senderId, String originalMessage) {
-        plugin.scheduler().runGlobal(() -> {
-            Player sender = Bukkit.getPlayer(senderId);
-            if (sender == null || !sender.isOnline()) {
-                return;
-            }
-            plugin.scheduler().runEntity(sender, () -> handleChat(senderId, originalMessage));
-        });
+    public void handleIncomingChat(Player sender, String originalMessage) {
+        if (sender == null || originalMessage == null) {
+            return;
+        }
+        UUID senderId = sender.getUniqueId();
+        plugin.scheduler().runEntity(sender, () -> handleChat(senderId, originalMessage));
     }
 
     private void handleChat(UUID senderId, String originalMessage) {
@@ -88,8 +85,8 @@ public final class ChatListener implements Listener {
             return;
         }
 
-        chatMessage = censorMessage(chatMessage);
-        MentionResult mentionResult = processMentions(chatMessage);
+        chatMessage = plugin.censorService().censor(chatMessage);
+        MentionResult mentionResult = processMentions(sender, chatMessage);
         chatMessage = mentionResult.formatted;
         String messageTime = buildMessageTime();
         String messageId = buildMessageId();
@@ -208,45 +205,47 @@ public final class ChatListener implements Listener {
 
     private String resolveServerId() {
         String value = plugin.configuration().getString("proxy-sync.server-id", "server");
-        if (value == null || value.isBlank()) {
-            return "server";
-        }
-        return value;
+        return MessageIdGenerator.sanitizeServerId(value);
     }
 
     private void dispatchMessage(Player sender, ChatRoute chatRoute, Component message) {
-        if (chatRoute.mode == ChatMode.GLOBAL) {
-            for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-                onlinePlayer.sendMessage(message);
-            }
-            return;
-        }
-
-        if (chatRoute.mode == ChatMode.GROUP) {
-            for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-                if (onlinePlayer.getUniqueId().equals(sender.getUniqueId())) {
-                    onlinePlayer.sendMessage(message);
-                    continue;
-                }
-                if (!chatRoute.viewPermission.isBlank() && !onlinePlayer.hasPermission(chatRoute.viewPermission)) {
-                    continue;
-                }
-                onlinePlayer.sendMessage(message);
-            }
-            return;
-        }
-
         double radius = plugin.configuration().getDouble("local-chat.radius", 70.0);
         double radiusSquared = radius * radius;
         Location senderLocation = sender.getLocation();
+        UUID senderWorldId = senderLocation.getWorld() == null ? null : senderLocation.getWorld().getUID();
+        UUID senderId = sender.getUniqueId();
 
         for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-            if (!onlinePlayer.getWorld().equals(senderLocation.getWorld())) {
-                continue;
-            }
-            if (onlinePlayer.getLocation().distanceSquared(senderLocation) <= radiusSquared) {
-                onlinePlayer.sendMessage(message);
-            }
+            plugin.scheduler().runEntity(onlinePlayer, () -> {
+                if (!onlinePlayer.isOnline()) {
+                    return;
+                }
+                if (chatRoute.mode == ChatMode.GLOBAL) {
+                    onlinePlayer.sendMessage(message);
+                    return;
+                }
+                if (chatRoute.mode == ChatMode.GROUP) {
+                    if (!onlinePlayer.getUniqueId().equals(senderId)
+                            && !chatRoute.viewPermission.isBlank()
+                            && !onlinePlayer.hasPermission(chatRoute.viewPermission)) {
+                        return;
+                    }
+                    onlinePlayer.sendMessage(message);
+                    return;
+                }
+                Location receiverLocation = onlinePlayer.getLocation();
+                if (senderWorldId == null
+                        || receiverLocation.getWorld() == null
+                        || !receiverLocation.getWorld().getUID().equals(senderWorldId)) {
+                    return;
+                }
+                double x = receiverLocation.getX() - senderLocation.getX();
+                double y = receiverLocation.getY() - senderLocation.getY();
+                double z = receiverLocation.getZ() - senderLocation.getZ();
+                if (x * x + y * y + z * z <= radiusSquared) {
+                    onlinePlayer.sendMessage(message);
+                }
+            });
         }
     }
 
@@ -344,7 +343,7 @@ public final class ChatListener implements Listener {
     }
 
     private Component buildChatMessageComponent(Player sender, String messageText, String chatTypeName, String messageTime, String messageId) {
-        String resolvedMessage = plugin.applyPlaceholders(sender, messageText == null ? "" : messageText);
+        String resolvedMessage = messageText == null ? "" : messageText;
         Component messageComponent = parseLinksWithColoredText(resolvedMessage);
 
         if (!plugin.configuration().getBoolean("message-hover.enabled", true)) {
@@ -362,14 +361,14 @@ public final class ChatListener implements Listener {
         String plainMessage = extractPlainText(resolvedMessage);
         List<String> replaced = new ArrayList<>();
         for (String line : hoverLines) {
-            String resolved = line
+            String resolved = plugin.applyPlaceholders(sender, line)
                     .replace("%player_name%", sender.getName())
                     .replace("%chat_type%", chatTypeName)
                     .replace("%message%", resolvedMessage)
                     .replace("%message_plain%", plainMessage)
                     .replace("%message_time%", messageTime)
                     .replace("%message_id%", messageId);
-            replaced.add(plugin.applyPlaceholders(sender, resolved));
+            replaced.add(resolved);
         }
 
         String hoverText = String.join("\n", replaced);
@@ -998,9 +997,7 @@ public final class ChatListener implements Listener {
     }
 
     private String buildMessageId() {
-        String timePart = Long.toString(System.currentTimeMillis(), 36).toUpperCase(Locale.ROOT);
-        String counterPart = Long.toString(MESSAGE_COUNTER.incrementAndGet(), 36).toUpperCase(Locale.ROOT);
-        return timePart + "-" + counterPart;
+        return MessageIdGenerator.create(resolveServerId());
     }
 
     private String resolveUltraPermissionsGroup(Player sender) {
@@ -1078,7 +1075,7 @@ public final class ChatListener implements Listener {
         return result;
     }
 
-    private MentionResult processMentions(String text) {
+    private MentionResult processMentions(Player sender, String text) {
         Matcher matcher = MENTION_PATTERN.matcher(text);
         String mentionFormat = plugin.messages().getString("mention.highlight-format", "&6@%mention%");
         Set<Player> mentionedPlayers = new LinkedHashSet<>();
@@ -1086,7 +1083,7 @@ public final class ChatListener implements Listener {
 
         while (matcher.find()) {
             String mentionName = matcher.group(1);
-            Player target = findOnlinePlayer(mentionName);
+            Player target = findOnlinePlayer(sender, mentionName);
 
             if (target != null) {
                 mentionedPlayers.add(target);
@@ -1101,14 +1098,15 @@ public final class ChatListener implements Listener {
         return new MentionResult(result.toString(), mentionedPlayers);
     }
 
-    private Player findOnlinePlayer(String name) {
+    private Player findOnlinePlayer(Player viewer, String name) {
         Player exact = Bukkit.getPlayerExact(name);
-        if (exact != null && exact.isOnline()) {
+        if (exact != null && exact.isOnline() && (viewer == null || viewer.canSee(exact))) {
             return exact;
         }
 
         for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-            if (onlinePlayer.getName().equalsIgnoreCase(name)) {
+            if (onlinePlayer.getName().equalsIgnoreCase(name)
+                    && (viewer == null || viewer.canSee(onlinePlayer))) {
                 return onlinePlayer;
             }
         }
@@ -1122,69 +1120,25 @@ public final class ChatListener implements Listener {
         }
 
         String soundKey = plugin.configuration().getString("mention.sound", "minecraft:block.note_block.pling");
-        Sound sound;
+        if (soundKey == null || soundKey.isBlank()) {
+            soundKey = "minecraft:block.note_block.pling";
+        }
+        Sound resolvedSound;
 
         try {
-            sound = Sound.sound(Key.key(soundKey), Sound.Source.PLAYER, 1.0f, 1.0f);
+            resolvedSound = Sound.sound(Key.key(soundKey), Sound.Source.PLAYER, 1.0f, 1.0f);
         } catch (IllegalArgumentException ignored) {
-            sound = Sound.sound(Key.key("minecraft:block.note_block.pling"), Sound.Source.PLAYER, 1.0f, 1.0f);
+            resolvedSound = Sound.sound(Key.key("minecraft:block.note_block.pling"), Sound.Source.PLAYER, 1.0f, 1.0f);
         }
+        Sound sound = resolvedSound;
 
         for (Player player : mentionedPlayers) {
-            if (player.isOnline()) {
-                player.playSound(sound);
-            }
+            plugin.scheduler().runEntity(player, () -> {
+                if (player.isOnline()) {
+                    player.playSound(sound);
+                }
+            });
         }
-    }
-
-    private String censorMessage(String message) {
-        if (!plugin.configuration().getBoolean("censor.enabled", true)) {
-            return message;
-        }
-
-        List<String> badWords = plugin.configuration().getStringList("censor.words");
-        if (badWords.isEmpty()) {
-            return message;
-        }
-
-        String result = message;
-
-        for (String badWord : badWords) {
-            if (badWord == null || badWord.isBlank()) {
-                continue;
-            }
-
-            Pattern pattern = Pattern.compile("(?iu)(?<![\\p{L}\\p{N}_])" + Pattern.quote(badWord) + "(?![\\p{L}\\p{N}_])");
-            Matcher matcher = pattern.matcher(result);
-            StringBuffer replaced = new StringBuffer();
-
-            while (matcher.find()) {
-                String found = matcher.group();
-                String masked = maskWord(found);
-                matcher.appendReplacement(replaced, Matcher.quoteReplacement(masked));
-            }
-
-            matcher.appendTail(replaced);
-            result = replaced.toString();
-        }
-
-        return result;
-    }
-
-    private String maskWord(String word) {
-        if (word.length() <= 2) {
-            return "*".repeat(word.length());
-        }
-
-        StringBuilder builder = new StringBuilder();
-        builder.append(word.charAt(0));
-
-        for (int index = 1; index < word.length() - 1; index++) {
-            builder.append('*');
-        }
-
-        builder.append(word.charAt(word.length() - 1));
-        return builder.toString();
     }
 
     private enum ChatMode {

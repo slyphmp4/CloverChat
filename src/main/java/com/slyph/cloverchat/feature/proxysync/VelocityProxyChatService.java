@@ -1,6 +1,7 @@
 package com.slyph.cloverchat.feature.proxysync;
 
 import com.slyph.cloverchat.CloverChatPlugin;
+import com.slyph.cloverchat.feature.messageinspect.MessageIdGenerator;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 import org.bukkit.Bukkit;
@@ -19,18 +20,16 @@ public final class VelocityProxyChatService implements PluginMessageListener {
     private static final String BUNGEE_CHANNEL = "BungeeCord";
     private static final String BUNGEE_CHANNEL_NAMESPACED = "bungeecord:main";
     private static final String FORWARD_SUBCHANNEL = "Forward";
-    private static final String PAYLOAD_VERSION = "1";
 
     private final CloverChatPlugin plugin;
-    private final GsonComponentSerializer serializer;
-    private final Map<String, Long> seenMessageIds;
-    private boolean active;
-    private long lastCleanupEpochMillis;
+    private final GsonComponentSerializer serializer = GsonComponentSerializer.gson();
+    private final Map<String, Long> seenMessageIds = new ConcurrentHashMap<>();
+    private volatile boolean active;
+    private volatile long lastCleanupEpochMillis;
+    private volatile ProxyPayloadCodec codec;
 
     public VelocityProxyChatService(CloverChatPlugin plugin) {
         this.plugin = plugin;
-        this.serializer = GsonComponentSerializer.gson();
-        this.seenMessageIds = new ConcurrentHashMap<>();
     }
 
     public void start() {
@@ -38,15 +37,30 @@ public final class VelocityProxyChatService implements PluginMessageListener {
         if (!plugin.configuration().getBoolean("proxy-sync.enabled", false)) {
             return;
         }
-        plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, BUNGEE_CHANNEL);
-        plugin.getServer().getMessenger().registerIncomingPluginChannel(plugin, BUNGEE_CHANNEL, this);
-        active = true;
+
+        String sharedSecret = resolveSharedSecret();
+        if (!ProxyPayloadCodec.isStrongSecret(sharedSecret)) {
+            plugin.getLogger().warning("[ProxySync] Синхронизация отключена: задайте общий секрет длиной от 32 байт через CLOVERCHAT_PROXY_SECRET или proxy-sync.shared-secret");
+            return;
+        }
+
+        try {
+            codec = new ProxyPayloadCodec(sharedSecret);
+            plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, BUNGEE_CHANNEL);
+            plugin.getServer().getMessenger().registerIncomingPluginChannel(plugin, BUNGEE_CHANNEL, this);
+            active = true;
+        } catch (Exception exception) {
+            codec = null;
+            active = false;
+            plugin.getLogger().warning("[ProxySync] Не удалось запустить синхронизацию: " + exception.getMessage());
+        }
     }
 
     public void stop() {
         plugin.getServer().getMessenger().unregisterOutgoingPluginChannel(plugin, BUNGEE_CHANNEL);
         plugin.getServer().getMessenger().unregisterIncomingPluginChannel(plugin, BUNGEE_CHANNEL, this);
         active = false;
+        codec = null;
         seenMessageIds.clear();
     }
 
@@ -55,25 +69,26 @@ public final class VelocityProxyChatService implements PluginMessageListener {
     }
 
     public void forwardGlobalMessage(Player sender, String messageId, Component message) {
-        if (!active || message == null || messageId == null || messageId.isBlank()) {
+        ProxyPayloadCodec activeCodec = codec;
+        if (!active || activeCodec == null || message == null || messageId == null || messageId.isBlank()) {
             return;
         }
 
         rememberMessageId(messageId);
-
         String sourceServer = getServerId();
-        String payloadJson = serializer.serialize(message);
-        ProxyPayload payload = new ProxyPayload(
-                PAYLOAD_VERSION,
+        ProxyPayloadCodec.Payload payload = new ProxyPayloadCodec.Payload(
+                ProxyPayloadCodec.VERSION,
+                System.currentTimeMillis(),
                 sourceServer,
                 messageId,
                 "GLOBAL",
                 "",
-                payloadJson
+                serializer.serialize(message)
         );
 
-        byte[] innerData = encodePayload(payload);
+        byte[] innerData = activeCodec.encode(payload);
         if (innerData == null || innerData.length == 0) {
+            logDebug("Global message payload is too large or invalid: " + messageId);
             return;
         }
 
@@ -87,57 +102,59 @@ public final class VelocityProxyChatService implements PluginMessageListener {
             return;
         }
 
-        carrier.sendPluginMessage(plugin, BUNGEE_CHANNEL, transportData);
-        logDebug("Forwarded global chat message id=" + messageId + " source=" + sourceServer);
+        plugin.scheduler().runEntity(carrier, () -> {
+            if (!active || !carrier.isOnline()) {
+                return;
+            }
+            carrier.sendPluginMessage(plugin, BUNGEE_CHANNEL, transportData);
+            logDebug("Forwarded global chat message id=" + messageId + " source=" + sourceServer);
+        });
     }
 
     @Override
     public void onPluginMessageReceived(String channel, Player player, byte[] message) {
-        if (!active || message == null || message.length == 0) {
+        ProxyPayloadCodec activeCodec = codec;
+        if (!active || activeCodec == null || message == null || message.length == 0 || message.length > 32767) {
             return;
         }
         if (!BUNGEE_CHANNEL.equalsIgnoreCase(channel) && !BUNGEE_CHANNEL_NAMESPACED.equalsIgnoreCase(channel)) {
             return;
         }
 
-        try {
-            DataInputStream input = new DataInputStream(new ByteArrayInputStream(message));
+        try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(message))) {
             String subchannel = input.readUTF();
             if (!getSubchannel().equalsIgnoreCase(subchannel)) {
                 return;
             }
 
-            short length = input.readShort();
-            if (length <= 0) {
+            int length = input.readUnsignedShort();
+            if (length <= 0 || length > ProxyPayloadCodec.MAX_PACKET_BYTES || input.available() != length) {
                 return;
             }
 
             byte[] payloadBytes = new byte[length];
             input.readFully(payloadBytes);
-            ProxyPayload payload = decodePayload(payloadBytes);
+            long maxAgeMillis = Math.max(5L, Math.min(
+                    plugin.configuration().getLong("proxy-sync.max-message-age-seconds", 45L),
+                    300L
+            )) * 1000L;
+            ProxyPayloadCodec.Payload payload = activeCodec.decode(payloadBytes, System.currentTimeMillis(), maxAgeMillis);
             if (payload == null) {
+                logDebug("Rejected unsigned, expired or invalid proxy message");
                 return;
             }
 
-            if (!"GLOBAL".equalsIgnoreCase(payload.mode)) {
+            if (payload.sourceServer().equalsIgnoreCase(getServerId())) {
+                return;
+            }
+            if (!rememberMessageId(payload.messageId())) {
                 return;
             }
 
-            String localServerId = getServerId();
-            if (!payload.sourceServer.isBlank() && payload.sourceServer.equalsIgnoreCase(localServerId)) {
-                return;
-            }
-
-            if (!rememberMessageId(payload.messageId)) {
-                return;
-            }
-
-            Component component = serializer.deserialize(payload.componentJson);
-            Component tagged = applyServerTag(payload.sourceServer, component);
-            plugin.scheduler().runGlobal(() -> {
-                dispatchIncoming(tagged);
-                logDebug("Received global chat message id=" + payload.messageId + " source=" + payload.sourceServer);
-            });
+            Component component = serializer.deserialize(payload.componentJson());
+            Component tagged = applyServerTag(payload.sourceServer(), component);
+            dispatchIncoming(tagged);
+            logDebug("Received global chat message id=" + payload.messageId() + " source=" + payload.sourceServer());
         } catch (Exception exception) {
             logDebug("Failed to process proxy-sync message: " + exception.getMessage());
         }
@@ -145,7 +162,11 @@ public final class VelocityProxyChatService implements PluginMessageListener {
 
     private void dispatchIncoming(Component message) {
         for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-            onlinePlayer.sendMessage(message);
+            plugin.scheduler().runEntity(onlinePlayer, () -> {
+                if (onlinePlayer.isOnline()) {
+                    onlinePlayer.sendMessage(message);
+                }
+            });
         }
     }
 
@@ -154,81 +175,47 @@ public final class VelocityProxyChatService implements PluginMessageListener {
             return message;
         }
         String format = plugin.configuration().getString("proxy-sync.server-tag.format", "&#65798F[&#AFCFFF%server%&#65798F] ");
-        String server = sourceServer == null || sourceServer.isBlank() ? "unknown" : sourceServer;
-        String resolved = (format == null ? "" : format).replace("%server%", server);
+        String resolved = (format == null ? "" : format).replace("%server%", sourceServer);
         return plugin.deserializeColored(resolved).append(message);
     }
 
     private byte[] encodeForward(byte[] payload) {
-        if (payload.length > 32767) {
+        if (payload.length > ProxyPayloadCodec.MAX_PACKET_BYTES) {
             return null;
         }
-        String targetServer = plugin.configuration().getString("proxy-sync.target-server", "ALL");
-        String target = targetServer == null || targetServer.isBlank() ? "ALL" : targetServer;
+        String target = getTargetServer();
         String subchannel = getSubchannel();
 
         try {
             ByteArrayOutputStream stream = new ByteArrayOutputStream();
-            DataOutputStream output = new DataOutputStream(stream);
-            output.writeUTF(FORWARD_SUBCHANNEL);
-            output.writeUTF(target);
-            output.writeUTF(subchannel);
-            output.writeShort(payload.length);
-            output.write(payload);
-            return stream.toByteArray();
-        } catch (Exception exception) {
-            return null;
-        }
-    }
-
-    private byte[] encodePayload(ProxyPayload payload) {
-        try {
-            ByteArrayOutputStream stream = new ByteArrayOutputStream();
-            DataOutputStream output = new DataOutputStream(stream);
-            output.writeUTF(payload.version);
-            output.writeUTF(payload.sourceServer);
-            output.writeUTF(payload.messageId);
-            output.writeUTF(payload.mode);
-            output.writeUTF(payload.viewPermission);
-            output.writeUTF(payload.componentJson);
-            return stream.toByteArray();
-        } catch (Exception exception) {
-            return null;
-        }
-    }
-
-    private ProxyPayload decodePayload(byte[] data) {
-        try {
-            DataInputStream input = new DataInputStream(new ByteArrayInputStream(data));
-            String version = input.readUTF();
-            String sourceServer = input.readUTF();
-            String messageId = input.readUTF();
-            String mode = input.readUTF();
-            String viewPermission = input.readUTF();
-            String componentJson = input.readUTF();
-            if (!PAYLOAD_VERSION.equals(version)) {
-                return null;
+            try (DataOutputStream output = new DataOutputStream(stream)) {
+                output.writeUTF(FORWARD_SUBCHANNEL);
+                output.writeUTF(target);
+                output.writeUTF(subchannel);
+                output.writeShort(payload.length);
+                output.write(payload);
             }
-            if (messageId == null || messageId.isBlank()) {
-                return null;
-            }
-            if (componentJson == null || componentJson.isBlank()) {
-                return null;
-            }
-            return new ProxyPayload(version, sourceServer, messageId, mode, viewPermission, componentJson);
+            byte[] encoded = stream.toByteArray();
+            return encoded.length <= 32767 ? encoded : null;
         } catch (Exception exception) {
             return null;
         }
     }
 
     private boolean rememberMessageId(String messageId) {
-        if (messageId == null || messageId.isBlank()) {
+        if (messageId == null || !messageId.matches("[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}")) {
             return false;
         }
         long now = System.currentTimeMillis();
         cleanupSeenCache(now);
-        Long existing = seenMessageIds.putIfAbsent(messageId, now);
-        return existing == null;
+        int limit = Math.max(1000, Math.min(
+                plugin.configuration().getInt("proxy-sync.max-dedup-entries", 10000),
+                100000
+        ));
+        if (seenMessageIds.size() >= limit) {
+            removeOldestSeenMessage();
+        }
+        return seenMessageIds.putIfAbsent(messageId, now) == null;
     }
 
     private void cleanupSeenCache(long now) {
@@ -237,8 +224,22 @@ public final class VelocityProxyChatService implements PluginMessageListener {
         }
         lastCleanupEpochMillis = now;
         int ttlSeconds = plugin.configuration().getInt("proxy-sync.dedup-cache-seconds", 120);
-        long ttlMillis = Math.max(30L, ttlSeconds) * 1000L;
+        long ttlMillis = Math.max(30L, Math.min(ttlSeconds, 3600)) * 1000L;
         seenMessageIds.entrySet().removeIf(entry -> now - entry.getValue() > ttlMillis);
+    }
+
+    private void removeOldestSeenMessage() {
+        String oldestId = null;
+        long oldestTime = Long.MAX_VALUE;
+        for (Map.Entry<String, Long> entry : seenMessageIds.entrySet()) {
+            if (entry.getValue() < oldestTime) {
+                oldestTime = entry.getValue();
+                oldestId = entry.getKey();
+            }
+        }
+        if (oldestId != null) {
+            seenMessageIds.remove(oldestId, oldestTime);
+        }
     }
 
     private Player resolveCarrier(Player sender) {
@@ -251,17 +252,31 @@ public final class VelocityProxyChatService implements PluginMessageListener {
         return null;
     }
 
+    private String resolveSharedSecret() {
+        String environmentSecret = System.getenv("CLOVERCHAT_PROXY_SECRET");
+        if (environmentSecret != null && !environmentSecret.isBlank()) {
+            return environmentSecret;
+        }
+        return plugin.configuration().getString("proxy-sync.shared-secret", "");
+    }
+
     private String getServerId() {
-        String value = plugin.configuration().getString("proxy-sync.server-id", "server");
-        if (value == null || value.isBlank()) {
-            return "server";
+        return MessageIdGenerator.sanitizeServerId(
+                plugin.configuration().getString("proxy-sync.server-id", "server")
+        );
+    }
+
+    private String getTargetServer() {
+        String value = plugin.configuration().getString("proxy-sync.target-server", "ALL");
+        if (value == null || !value.matches("[A-Za-z0-9_.-]{1,64}")) {
+            return "ALL";
         }
         return value;
     }
 
     private String getSubchannel() {
         String value = plugin.configuration().getString("proxy-sync.subchannel", "CloverChatSync");
-        if (value == null || value.isBlank()) {
+        if (value == null || !value.matches("[A-Za-z0-9_.:-]{1,64}")) {
             return "CloverChatSync";
         }
         return value;
@@ -270,31 +285,6 @@ public final class VelocityProxyChatService implements PluginMessageListener {
     private void logDebug(String message) {
         if (plugin.configuration().getBoolean("proxy-sync.debug-log", false)) {
             plugin.getLogger().info("[ProxySync] " + message);
-        }
-    }
-
-    private static final class ProxyPayload {
-        private final String version;
-        private final String sourceServer;
-        private final String messageId;
-        private final String mode;
-        private final String viewPermission;
-        private final String componentJson;
-
-        private ProxyPayload(
-                String version,
-                String sourceServer,
-                String messageId,
-                String mode,
-                String viewPermission,
-                String componentJson
-        ) {
-            this.version = version;
-            this.sourceServer = sourceServer == null ? "" : sourceServer;
-            this.messageId = messageId == null ? "" : messageId;
-            this.mode = mode == null ? "" : mode;
-            this.viewPermission = viewPermission == null ? "" : viewPermission;
-            this.componentJson = componentJson == null ? "" : componentJson;
         }
     }
 }
