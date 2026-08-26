@@ -64,6 +64,17 @@ prefix-hover:
 
 prefix-hover-text: []
 
+badge-hover:
+  enabled: true
+  lines:
+    - "%badge_text% &#E0E0E0— %badge_name%"
+    - "&7"
+    - "&#B8C2C2 ▪ Beschreibung"
+    - "%badge_description%"
+    - "&7"
+    - "&#73FF86 ◆ So erhältst du es"
+    - "%badge_how_to_get%"
+
 message-hover:
   lines:
     - "&#CBFFF7✎ Autor: &#90FFE7%player_name% "
