@@ -56,6 +56,7 @@ public final class CloverChatPlugin extends JavaPlugin {
     private FileConfiguration hoversConfiguration;
     private FileConfiguration autoMessagesConfiguration;
     private boolean modernChatBridgeEnabled;
+    private boolean fabricRuntime;
     private String activeLanguage = DEFAULT_LANGUAGE;
 
     @Override
@@ -71,9 +72,15 @@ public final class CloverChatPlugin extends JavaPlugin {
         velocityProxyChatService = new VelocityProxyChatService(this);
 
         ChatListener chatListener = new ChatListener(this);
-        modernChatBridgeEnabled = new ModernChatBridge(this, chatListener).register();
-        if (!modernChatBridgeEnabled) {
+        fabricRuntime = isFabricRuntime();
+        if (fabricRuntime) {
+            modernChatBridgeEnabled = false;
             getServer().getPluginManager().registerEvents(chatListener, this);
+        } else {
+            modernChatBridgeEnabled = new ModernChatBridge(this, chatListener).register();
+            if (!modernChatBridgeEnabled) {
+                getServer().getPluginManager().registerEvents(chatListener, this);
+            }
         }
         getServer().getPluginManager().registerEvents(new JoinQuitListener(this), this);
         getServer().getPluginManager().registerEvents(new CommandCooldownListener(this), this);
@@ -288,6 +295,15 @@ public final class CloverChatPlugin extends JavaPlugin {
         }
     }
 
+    private boolean isFabricRuntime() {
+        try {
+            Class.forName("net.fabricmc.loader.api.FabricLoader", false, getClass().getClassLoader());
+            return true;
+        } catch (ClassNotFoundException ignored) {
+            return false;
+        }
+    }
+
     private String normalizeLanguage(String input) {
         if (input == null) {
             return DEFAULT_LANGUAGE;
@@ -308,15 +324,18 @@ public final class CloverChatPlugin extends JavaPlugin {
         String messageInspectorStatus = messageAuditService != null && messageAuditService.isEnabled() ? "Включен" : "Выключен";
         String messageInspectorProfile = messageAuditService == null ? "-" : messageAuditService.activeProfileName();
         String schedulerMode = compatScheduler != null && compatScheduler.isFolia() ? "Folia" : "Paper/Spigot";
+        String chatMode = modernChatBridgeEnabled
+                ? "AsyncChatEvent (Paper)"
+                : fabricRuntime ? "AsyncPlayerChatEvent (Fabric/Cardboard)" : "AsyncPlayerChatEvent";
 
         getLogger().info("");
-        getLogger().info(LOG_TOP);
+        getLogger().info(LOG_TOP));
         getLogger().info(boxLine("CloverChat"));
         getLogger().info(boxLine("Автор: slyph"));
         getLogger().info(LOG_SEPARATOR);
         getLogger().info(boxLine("Версия: " + version));
         getLogger().info(boxLine("Язык: " + activeLanguage));
-        getLogger().info(boxLine("Чат режим: " + (modernChatBridgeEnabled ? "AsyncChatEvent (1.19+)" : "AsyncPlayerChatEvent")));
+        getLogger().info(boxLine("Чат режим: " + chatMode));
         getLogger().info(boxLine("PlaceholderAPI: " + placeholderApiStatus));
         getLogger().info(boxLine("Проверка обновлений: " + updateCheckerStatus));
         getLogger().info(boxLine("Автосообщения: " + autoMessagesStatus));
