@@ -28,6 +28,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -221,9 +225,27 @@ public final class CloverChatPlugin extends JavaPlugin {
         File messagesFile = ensureLanguageResourceFile(activeLanguage, "messages.yml");
         File hoversFile = ensureLanguageResourceFile(activeLanguage, "hovers.yml");
         File autoMessagesFile = ensureRootResourceFile("auto-messages.yml");
-        messagesConfiguration = YamlConfiguration.loadConfiguration(messagesFile);
-        hoversConfiguration = YamlConfiguration.loadConfiguration(hoversFile);
+        messagesConfiguration = loadWithDefaults(messagesFile, "langs/" + activeLanguage + "/messages.yml");
+        hoversConfiguration = loadWithDefaults(hoversFile, "langs/" + activeLanguage + "/hovers.yml");
         autoMessagesConfiguration = YamlConfiguration.loadConfiguration(autoMessagesFile);
+    }
+
+    private FileConfiguration loadWithDefaults(File file, String resourcePath) {
+        YamlConfiguration configuration = YamlConfiguration.loadConfiguration(file);
+        try (InputStream inputStream = getResource(resourcePath)) {
+            if (inputStream == null) {
+                return configuration;
+            }
+            YamlConfiguration defaults = YamlConfiguration.loadConfiguration(
+                    new InputStreamReader(inputStream, StandardCharsets.UTF_8)
+            );
+            configuration.setDefaults(defaults);
+            configuration.options().copyDefaults(true);
+            configuration.save(file);
+        } catch (IOException exception) {
+            getLogger().warning("Failed to update " + file.getName() + ": " + exception.getMessage());
+        }
+        return configuration;
     }
 
     private void ensureLanguageResources(String language) {
@@ -290,7 +312,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         getLogger().info("");
         getLogger().info(LOG_TOP);
         getLogger().info(boxLine("CloverChat"));
-        getLogger().info(boxLine("Автор: slyphmp4"));
+        getLogger().info(boxLine("Автор: slyph"));
         getLogger().info(LOG_SEPARATOR);
         getLogger().info(boxLine("Версия: " + version));
         getLogger().info(boxLine("Язык: " + activeLanguage));
