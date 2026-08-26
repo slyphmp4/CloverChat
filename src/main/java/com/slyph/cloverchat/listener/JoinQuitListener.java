@@ -1,6 +1,7 @@
 package com.slyph.cloverchat.listener;
 
 import com.slyph.cloverchat.CloverChatPlugin;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -8,11 +9,13 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 public final class JoinQuitListener implements Listener {
 
+    private static final String PLAYER_TOKEN = "__cloverchat_join_player_4e27__";
     private final CloverChatPlugin plugin;
 
     public JoinQuitListener(CloverChatPlugin plugin) {
@@ -27,43 +30,57 @@ public final class JoinQuitListener implements Listener {
 
         event.joinMessage(null);
         Player joinedPlayer = event.getPlayer();
-
         List<String> lines = plugin.messages().getStringList("join-message.lines");
         if (lines.isEmpty()) {
             lines = Arrays.asList("&7", "&a+ %player_name% зашел на сервер", "&7");
         }
-
-        for (Player receiver : Bukkit.getOnlinePlayers()) {
-            sendLines(receiver, joinedPlayer, lines);
-        }
+        broadcast(joinedPlayer, resolveLines(joinedPlayer, lines));
     }
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player leftPlayer = event.getPlayer();
         plugin.headMessageService().clear(leftPlayer.getUniqueId());
-
         if (!plugin.configuration().getBoolean("leave-message.enabled", true)) {
             return;
         }
 
         event.quitMessage(null);
-
         List<String> lines = plugin.messages().getStringList("leave-message.lines");
         if (lines.isEmpty()) {
             lines = Arrays.asList("&7", "&c- %player_name% вышел с сервера", "&7");
         }
-
-        for (Player receiver : Bukkit.getOnlinePlayers()) {
-            sendLines(receiver, leftPlayer, lines);
-        }
+        broadcast(leftPlayer, resolveLines(leftPlayer, lines));
     }
 
-    private void sendLines(Player receiver, Player context, List<String> lines) {
+    private List<Component> resolveLines(Player context, List<String> lines) {
+        List<Component> result = new ArrayList<>(lines.size());
         for (String line : lines) {
-            String resolved = line.replace("%player_name%", context.getName());
-            resolved = plugin.applyPlaceholders(context, resolved);
-            receiver.sendMessage(plugin.deserializeColored(resolved));
+            String tokenized = line.replace("%player_name%", PLAYER_TOKEN);
+            String resolved = plugin.applyPlaceholders(context, tokenized)
+                    .replace(PLAYER_TOKEN, context.getName());
+            result.add(plugin.deserializeColored(resolved));
+        }
+        return List.copyOf(result);
+    }
+
+    private void broadcast(Player context, List<Component> lines) {
+        for (Player receiver : Bukkit.getOnlinePlayers()) {
+            plugin.scheduler().runEntity(receiver, () -> {
+                if (!receiver.isOnline()) {
+                    return;
+                }
+                try {
+                    if (!receiver.getUniqueId().equals(context.getUniqueId()) && !receiver.canSee(context)) {
+                        return;
+                    }
+                } catch (Exception ignored) {
+                    return;
+                }
+                for (Component line : lines) {
+                    receiver.sendMessage(line);
+                }
+            });
         }
     }
 }
