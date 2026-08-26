@@ -329,7 +329,7 @@ public final class CloverChatPlugin extends JavaPlugin {
                 : fabricRuntime ? "AsyncPlayerChatEvent (Fabric/Cardboard)" : "AsyncPlayerChatEvent";
 
         getLogger().info("");
-        getLogger().info(LOG_TOP));
+        getLogger().info(LOG_TOP);
         getLogger().info(boxLine("CloverChat"));
         getLogger().info(boxLine("Автор: slyph"));
         getLogger().info(LOG_SEPARATOR);
