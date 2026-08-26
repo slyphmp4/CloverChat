@@ -97,6 +97,8 @@ public final class ChatListener implements Listener {
         String playerToken = "__cloverchat_player_name__";
         String prefixToken = "__cloverchat_prefix__";
         String reputationToken = "__cloverchat_reputation__";
+        String badgesToken = "__cloverchat_badges__";
+        String badgesSpacedToken = "__cloverchat_badges_spaced__";
         String messageToken = "__cloverchat_message__";
         String format = chatRoute.format;
 
@@ -107,8 +109,8 @@ public final class ChatListener implements Listener {
         format = replaceNamePlaceholders(format, playerToken);
         format = format.replace("%uperms_prefix%", prefixToken);
         format = replaceReputationPlaceholders(format, reputationToken);
-        format = format
-                .replace("%message%", messageToken);
+        format = replaceBadgePlaceholders(format, badgesToken, badgesSpacedToken);
+        format = format.replace("%message%", messageToken);
 
         format = plugin.applyPlaceholders(sender, format);
         if (resolvedPrefix.isBlank()) {
@@ -124,6 +126,8 @@ public final class ChatListener implements Listener {
                 playerToken,
                 prefixToken,
                 reputationToken,
+                badgesToken,
+                badgesSpacedToken,
                 messageToken,
                 resolvedPrefix,
                 resolvedDisplayName,
@@ -252,6 +256,8 @@ public final class ChatListener implements Listener {
             String playerToken,
             String prefixToken,
             String reputationToken,
+            String badgesToken,
+            String badgesSpacedToken,
             String messageToken,
             String resolvedPrefix,
             String resolvedDisplayName,
@@ -268,6 +274,8 @@ public final class ChatListener implements Listener {
             int nextPlayerIndex = input.indexOf(playerToken, currentIndex);
             int nextPrefixIndex = input.indexOf(prefixToken, currentIndex);
             int nextReputationIndex = input.indexOf(reputationToken, currentIndex);
+            int nextBadgesIndex = input.indexOf(badgesToken, currentIndex);
+            int nextBadgesSpacedIndex = input.indexOf(badgesSpacedToken, currentIndex);
             int nextMessageIndex = input.indexOf(messageToken, currentIndex);
 
             int tokenStart = Integer.MAX_VALUE;
@@ -284,6 +292,14 @@ public final class ChatListener implements Listener {
             if (nextReputationIndex >= 0 && nextReputationIndex < tokenStart) {
                 tokenStart = nextReputationIndex;
                 tokenType = "reputation";
+            }
+            if (nextBadgesIndex >= 0 && nextBadgesIndex < tokenStart) {
+                tokenStart = nextBadgesIndex;
+                tokenType = "badges";
+            }
+            if (nextBadgesSpacedIndex >= 0 && nextBadgesSpacedIndex < tokenStart) {
+                tokenStart = nextBadgesSpacedIndex;
+                tokenType = "badges-spaced";
             }
             if (nextMessageIndex >= 0 && nextMessageIndex < tokenStart) {
                 tokenStart = nextMessageIndex;
@@ -308,6 +324,12 @@ public final class ChatListener implements Listener {
             } else if (tokenType.equals("reputation")) {
                 result = result.append(buildReputationComponent(sender, resolvedReputation));
                 currentIndex = tokenStart + reputationToken.length();
+            } else if (tokenType.equals("badges")) {
+                result = result.append(buildBadgesComponent(sender, false));
+                currentIndex = tokenStart + badgesToken.length();
+            } else if (tokenType.equals("badges-spaced")) {
+                result = result.append(buildBadgesComponent(sender, true));
+                currentIndex = tokenStart + badgesSpacedToken.length();
             } else {
                 result = result.append(buildChatMessageComponent(sender, messageText, chatTypeName, messageTime, messageId));
                 currentIndex = tokenStart + messageToken.length();
@@ -562,6 +584,187 @@ public final class ChatListener implements Listener {
             return configured;
         }
         return List.of("%cloverrep_reputation%");
+    }
+
+    private String replaceBadgePlaceholders(String format, String badgesToken, String badgesSpacedToken) {
+        if (format == null || format.isEmpty()) {
+            return format;
+        }
+        return format
+                .replace("%cloverbadges_badge_spaced%", badgesSpacedToken)
+                .replace("%cloverbadges_badges_spaced%", badgesSpacedToken)
+                .replace("%cloverbadges_badge%", badgesToken)
+                .replace("%cloverbadges_badges%", badgesToken);
+    }
+
+    private Component buildBadgesComponent(Player sender, boolean trailingSpace) {
+        List<BadgeHoverData> badges = resolveActiveBadgeHoverData(sender);
+        if (badges.isEmpty()) {
+            return Component.empty();
+        }
+
+        String separatorText = resolveCloverBadgesPlaceholder(sender, "%cloverbadges_separator%");
+        if (separatorText.isEmpty()) {
+            separatorText = " ";
+        }
+
+        Component result = Component.empty();
+        Component separator = plugin.deserializeColored(separatorText);
+        List<String> hoverLines = resolveBadgeHoverLines();
+        boolean hoverEnabled = plugin.hovers().getBoolean("badge-hover.enabled", true) && !hoverLines.isEmpty();
+
+        for (int index = 0; index < badges.size(); index++) {
+            if (index > 0) {
+                result = result.append(separator);
+            }
+
+            BadgeHoverData badge = badges.get(index);
+            Component badgeComponent = plugin.deserializeColored(badge.text);
+            if (hoverEnabled) {
+                List<String> replaced = new ArrayList<>();
+                for (String line : hoverLines) {
+                    String resolved = line
+                            .replace("%player_name%", sender.getName())
+                            .replace("%badge_id%", badge.id)
+                            .replace("%badge_text%", badge.text)
+                            .replace("%badge_name%", badge.name)
+                            .replace("%badge_description%", badge.description)
+                            .replace("%badge_how_to_get%", badge.howToGet)
+                            .replace("%badge_priority%", badge.priority)
+                            .replace("%badge_remaining%", badge.remaining);
+                    replaced.add(plugin.applyPlaceholders(sender, resolved));
+                }
+                String hoverText = String.join("\n", replaced);
+                badgeComponent = badgeComponent.hoverEvent(HoverEvent.showText(plugin.deserializeColored(hoverText)));
+            }
+            result = result.append(badgeComponent);
+        }
+
+        if (trailingSpace) {
+            result = result.append(Component.text(" "));
+        }
+        return result;
+    }
+
+    private List<BadgeHoverData> resolveActiveBadgeHoverData(Player sender) {
+        List<BadgeHoverData> result = new ArrayList<>();
+        for (int slot = 1; slot <= 2; slot++) {
+            String id = resolveCloverBadgesPlaceholder(sender, "%cloverbadges_badge_" + slot + "_id%");
+            String text = resolveCloverBadgesPlaceholder(sender, "%cloverbadges_badge_" + slot + "%");
+            if (id.isEmpty() || text.isEmpty()) {
+                continue;
+            }
+
+            String name = resolveCloverBadgesPlaceholder(sender, "%cloverbadges_badge_" + slot + "_name%");
+            if (name.isEmpty()) {
+                name = id;
+            }
+
+            String description = resolveCloverBadgesPlaceholder(sender, "%cloverbadges_description_" + id + "%");
+            if (description.isEmpty()) {
+                description = missingBadgeDescription();
+            }
+
+            String howToGet = resolveCloverBadgesPlaceholder(sender, "%cloverbadges_how_to_get_" + id + "%");
+            if (howToGet.isEmpty()) {
+                howToGet = missingBadgeHowToGet();
+            }
+
+            String priority = resolveCloverBadgesPlaceholder(sender, "%cloverbadges_priority_" + id + "%");
+            String remaining = resolveCloverBadgesPlaceholder(sender, "%cloverbadges_expires_" + id + "%");
+            result.add(new BadgeHoverData(id, text, name, description, howToGet, priority, remaining));
+        }
+        return result;
+    }
+
+    private String resolveCloverBadgesPlaceholder(Player sender, String placeholder) {
+        if (!plugin.isPlaceholderApiHooked()) {
+            return "";
+        }
+        String resolved = plugin.applyPlaceholders(sender, placeholder);
+        if (resolved == null || resolved.isBlank() || resolved.equalsIgnoreCase(placeholder)) {
+            return "";
+        }
+        return resolved;
+    }
+
+    private List<String> resolveBadgeHoverLines() {
+        List<String> configured = plugin.hovers().getStringList("badge-hover.lines");
+        if (!configured.isEmpty()) {
+            return configured;
+        }
+
+        String language = plugin.activeLanguage();
+        if (language.equals("en")) {
+            return Arrays.asList(
+                    "%badge_text% &#E0E0E0— %badge_name%",
+                    "&7",
+                    "&#B8C2C2 ▪ Description",
+                    "%badge_description%",
+                    "&7",
+                    "&#73FF86 ◆ How to get",
+                    "%badge_how_to_get%"
+            );
+        }
+        if (language.equals("de")) {
+            return Arrays.asList(
+                    "%badge_text% &#E0E0E0— %badge_name%",
+                    "&7",
+                    "&#B8C2C2 ▪ Beschreibung",
+                    "%badge_description%",
+                    "&7",
+                    "&#73FF86 ◆ So erhältst du es",
+                    "%badge_how_to_get%"
+            );
+        }
+        if (language.equals("ua")) {
+            return Arrays.asList(
+                    "%badge_text% &#E0E0E0— %badge_name%",
+                    "&7",
+                    "&#B8C2C2 ▪ Опис",
+                    "%badge_description%",
+                    "&7",
+                    "&#73FF86 ◆ Як отримати",
+                    "%badge_how_to_get%"
+            );
+        }
+        return Arrays.asList(
+                "%badge_text% &#E0E0E0— %badge_name%",
+                "&7",
+                "&#B8C2C2 ▪ Описание",
+                "%badge_description%",
+                "&7",
+                "&#73FF86 ◆ Как получить",
+                "%badge_how_to_get%"
+        );
+    }
+
+    private String missingBadgeDescription() {
+        String language = plugin.activeLanguage();
+        if (language.equals("en")) {
+            return "&8Description is not specified.";
+        }
+        if (language.equals("de")) {
+            return "&8Keine Beschreibung angegeben.";
+        }
+        if (language.equals("ua")) {
+            return "&8Опис не вказано.";
+        }
+        return "&8Описание не указано.";
+    }
+
+    private String missingBadgeHowToGet() {
+        String language = plugin.activeLanguage();
+        if (language.equals("en")) {
+            return "&8Acquisition method is not specified.";
+        }
+        if (language.equals("de")) {
+            return "&8Erhaltmethode nicht angegeben.";
+        }
+        if (language.equals("ua")) {
+            return "&8Спосіб отримання не вказано.";
+        }
+        return "&8Способ получения не указан.";
     }
 
     private Component buildPrefixComponent(Player sender, String prefixText) {
@@ -1044,6 +1247,34 @@ public final class ChatListener implements Listener {
         private MentionResult(String formatted, Set<Player> mentionedPlayers) {
             this.formatted = formatted;
             this.mentionedPlayers = mentionedPlayers;
+        }
+    }
+
+    private static final class BadgeHoverData {
+        private final String id;
+        private final String text;
+        private final String name;
+        private final String description;
+        private final String howToGet;
+        private final String priority;
+        private final String remaining;
+
+        private BadgeHoverData(
+                String id,
+                String text,
+                String name,
+                String description,
+                String howToGet,
+                String priority,
+                String remaining
+        ) {
+            this.id = id;
+            this.text = text;
+            this.name = name;
+            this.description = description;
+            this.howToGet = howToGet;
+            this.priority = priority;
+            this.remaining = remaining;
         }
     }
 }
