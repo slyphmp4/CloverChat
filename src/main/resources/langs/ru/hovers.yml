@@ -73,13 +73,7 @@ prefix-hover-text: []
 badge-hover:
   enabled: true
   lines:
-    - "%badge_text% &#E0E0E0— %badge_name%"
-    - "&7"
-    - "&#B8C2C2 ▪ Описание"
-    - "%badge_description%"
-    - "&7"
-    - "&#73FF86 ◆ Как получить"
-    - "%badge_how_to_get%"
+    - "%cloverbadges_hover_%badge_id%%"
 
 message-hover:
   lines:
