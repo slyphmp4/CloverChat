@@ -46,3 +46,9 @@ permissions:
   cloverchat.commandcooldown.bypass:
     description: Обходит общий кулдаун команд
     default: op
+  cloverchat.message-style.admin:
+    description: Пример права на стиль сообщений администратора
+    default: false
+  cloverchat.message-style.vip:
+    description: Пример права на стиль сообщений VIP
+    default: false
