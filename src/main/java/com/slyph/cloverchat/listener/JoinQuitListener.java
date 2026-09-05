@@ -5,6 +5,7 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -37,15 +38,16 @@ public final class JoinQuitListener implements Listener {
         broadcast(joinedPlayer, resolveLines(joinedPlayer, lines));
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerQuit(PlayerQuitEvent event) {
+        event.setQuitMessage(null);
+        event.quitMessage(null);
         Player leftPlayer = event.getPlayer();
         plugin.headMessageService().clear(leftPlayer.getUniqueId());
         if (!plugin.configuration().getBoolean("leave-message.enabled", true)) {
             return;
         }
 
-        event.quitMessage(null);
         List<String> lines = plugin.messages().getStringList("leave-message.lines");
         if (lines.isEmpty()) {
             lines = Arrays.asList("&7", "&c- %player_name% вышел с сервера", "&7");
