@@ -2,6 +2,7 @@ package com.slyph.cloverchat.feature.messagestyle;
 
 import com.slyph.cloverchat.CloverChatPlugin;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.configuration.ConfigurationSection;
@@ -111,11 +112,71 @@ public final class MessageStyleService {
 
         return new MessageStyle(
                 color,
+                readGradientColors(ruleKey, section.getConfigurationSection("gradient")),
                 section.getBoolean("bold", false),
                 section.getBoolean("italic", false),
                 section.getBoolean("underlined", false),
                 section.getBoolean("strikethrough", false)
         );
+    }
+
+    private List<Integer> readGradientColors(String ruleKey, ConfigurationSection section) {
+        if (section == null || !section.getBoolean("enabled", false)) {
+            return List.of();
+        }
+
+        List<Integer> colors = new ArrayList<>();
+        for (String configuredColor : section.getStringList("colors")) {
+            String rawColor = configuredColor == null ? "" : configuredColor.trim();
+            Integer color = MessageStyleColorParser.parse(rawColor);
+            if (color == null) {
+                plugin.getLogger().warning("Message style rule '" + ruleKey + "' has an invalid gradient color: " + rawColor);
+                continue;
+            }
+            colors.add(color);
+        }
+
+        if (colors.size() < 2) {
+            plugin.getLogger().warning("Message style rule '" + ruleKey + "' requires at least two valid gradient colors");
+            return List.of();
+        }
+        return List.copyOf(colors);
+    }
+
+    private static int countCodePoints(Component component) {
+        int length = 0;
+        if (component instanceof TextComponent) {
+            String content = ((TextComponent) component).content();
+            length += content.codePointCount(0, content.length());
+        }
+        for (Component child : component.children()) {
+            length += countCodePoints(child);
+        }
+        return length;
+    }
+
+    private static Component applyGradient(Component component, List<Integer> colors, int totalLength, int[] position) {
+        List<Component> originalChildren = component.children();
+        Component result = component.children(List.of());
+
+        if (component instanceof TextComponent) {
+            String content = ((TextComponent) component).content();
+            result = ((TextComponent) result).content("");
+            int offset = 0;
+            while (offset < content.length()) {
+                int codePoint = content.codePointAt(offset);
+                String character = new String(Character.toChars(codePoint));
+                int color = GradientColorInterpolator.interpolate(colors, position[0], totalLength);
+                result = result.append(Component.text(character, TextColor.color(color)));
+                position[0]++;
+                offset += Character.charCount(codePoint);
+            }
+        }
+
+        for (Component child : originalChildren) {
+            result = result.append(applyGradient(child, colors, totalLength, position));
+        }
+        return result;
     }
 
     private enum SelectorType {
@@ -164,13 +225,22 @@ public final class MessageStyleService {
     private static final class MessageStyle {
 
         private final TextColor color;
+        private final List<Integer> gradientColors;
         private final boolean bold;
         private final boolean italic;
         private final boolean underlined;
         private final boolean strikethrough;
 
-        private MessageStyle(TextColor color, boolean bold, boolean italic, boolean underlined, boolean strikethrough) {
+        private MessageStyle(
+                TextColor color,
+                List<Integer> gradientColors,
+                boolean bold,
+                boolean italic,
+                boolean underlined,
+                boolean strikethrough
+        ) {
             this.color = color;
+            this.gradientColors = gradientColors;
             this.bold = bold;
             this.italic = italic;
             this.underlined = underlined;
@@ -178,12 +248,18 @@ public final class MessageStyleService {
         }
 
         private Component apply(Component component) {
-            Component styled = color == null ? component : component.color(color);
-            return styled
+            Component styled = component
                     .decoration(TextDecoration.BOLD, bold)
                     .decoration(TextDecoration.ITALIC, italic)
                     .decoration(TextDecoration.UNDERLINED, underlined)
                     .decoration(TextDecoration.STRIKETHROUGH, strikethrough);
+            if (gradientColors.size() >= 2) {
+                int totalLength = countCodePoints(styled);
+                if (totalLength > 0) {
+                    return applyGradient(styled, gradientColors, totalLength, new int[]{0});
+                }
+            }
+            return color == null ? styled : styled.color(color);
         }
     }
 }

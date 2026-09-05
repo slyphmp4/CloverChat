@@ -202,6 +202,11 @@ global-chat:
 # &#FF5555, &FF5555, #FF5555, &c или название red/gold/aqua.
 # color: "" или color: "none" оставляет цвет без переопределения.
 #
+# gradient.enabled: true включает градиент вместо обычного color.
+# В gradient.colors нужно указать минимум 2 цвета.
+# Можно указать 3 и больше цветов для сложного плавного перехода.
+# Если градиент выключен или настроен неправильно, используется color.
+#
 # bold         - жирный текст
 # italic       - курсив
 # underlined   - подчеркнутый текст
@@ -216,6 +221,11 @@ message-styles:
     # Включите, если нужен один стиль для всех, кому не подошло ни одно правило
     enabled: false
     color: "&f"
+    gradient:
+      enabled: false
+      colors:
+        - "&#CBFFF7"
+        - "&#90FFE7"
     bold: false
     italic: false
     underlined: false
@@ -230,6 +240,11 @@ message-styles:
         value: "cloverchat.message-style.admin"
       style:
         color: "&#FF6B6B"
+        gradient:
+          enabled: false
+          colors:
+            - "&#FF5555"
+            - "&#FFB86C"
         bold: true
         italic: false
         underlined: false
@@ -243,6 +258,11 @@ message-styles:
         value: "cloverchat.message-style.vip"
       style:
         color: "&#FFD667"
+        gradient:
+          enabled: false
+          colors:
+            - "&#FFD667"
+            - "&#FFF3D6"
         bold: false
         italic: false
         underlined: false
@@ -257,6 +277,12 @@ message-styles:
         value: "admin"
       style:
         color: "&#FF5555"
+        gradient:
+          enabled: true
+          colors:
+            - "&#FF5555"
+            - "&#FFB86C"
+            - "&#FFF3D6"
         bold: true
         italic: false
         underlined: true
