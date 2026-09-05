@@ -178,6 +178,99 @@ global-chat:
 
 
 # ============================================================
+# MESSAGE STYLES BY PERMISSION OR ULTRAPERMISSIONS GROUP
+# ============================================================
+# Здесь настраивается внешний вид только текста сообщения игрока.
+# Ник, префикс, репутация и значки не изменяются.
+# Hover сообщения и интерактивные действия ссылок сохраняются.
+#
+# Как работает выбор:
+# 1) Плагин берет все включенные правила.
+# 2) Сначала проверяет правило с самым большим priority.
+# 3) Применяет только первое подходящее правило.
+#
+# selector.type:
+# PERMISSION             - проверка права игрока.
+# ULTRAPERMISSIONS_GROUP - точное имя основной группы UltraPermissions.
+# Для PERMISSION можно указать любое право из вашей системы прав.
+#
+# Для ULTRAPERMISSIONS_GROUP нужны PlaceholderAPI и плейсхолдер
+# %uperms_group%. В value указывается ID группы, например: admin,
+# moderator, vip или default. Это не цветной префикс группы.
+#
+# Поддерживаемые цвета:
+# &#FF5555, &FF5555, #FF5555, &c или название red/gold/aqua.
+# color: "" или color: "none" оставляет цвет без переопределения.
+#
+# bold         - жирный текст
+# italic       - курсив
+# underlined   - подчеркнутый текст
+# strikethrough - зачеркнутый текст
+#
+# После изменения используйте: /cloverchatreload confirm
+
+message-styles:
+  enabled: true
+
+  fallback:
+    # Включите, если нужен один стиль для всех, кому не подошло ни одно правило
+    enabled: false
+    color: "&f"
+    bold: false
+    italic: false
+    underlined: false
+    strikethrough: false
+
+  rules:
+    admin-permission:
+      enabled: true
+      priority: 200
+      selector:
+        type: "PERMISSION"
+        value: "cloverchat.message-style.admin"
+      style:
+        color: "&#FF6B6B"
+        bold: true
+        italic: false
+        underlined: false
+        strikethrough: false
+
+    vip-permission:
+      enabled: true
+      priority: 100
+      selector:
+        type: "PERMISSION"
+        value: "cloverchat.message-style.vip"
+      style:
+        color: "&#FFD667"
+        bold: false
+        italic: false
+        underlined: false
+        strikethrough: false
+
+    ultrapermissions-admin-group:
+      # Выключено как пример. Поменяйте на true для группы admin
+      enabled: false
+      priority: 300
+      selector:
+        type: "ULTRAPERMISSIONS_GROUP"
+        value: "admin"
+      style:
+        color: "&#FF5555"
+        bold: true
+        italic: false
+        underlined: true
+        strikethrough: false
+
+# ----------------------------
+# Ваши заметки (MESSAGE STYLES)
+#
+#
+#
+# ----------------------------
+
+
+# ============================================================
 # GROUP CHAT CHANNELS
 # ============================================================
 # Готовый пример каналов.

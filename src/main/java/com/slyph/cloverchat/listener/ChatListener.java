@@ -129,6 +129,7 @@ public final class ChatListener implements Listener {
                 resolvedPrefix,
                 resolvedDisplayName,
                 resolvedReputation,
+                resolvedGroup,
                 chatMessage,
                 chatRoute.chatTypeName,
                 messageTime,
@@ -261,6 +262,7 @@ public final class ChatListener implements Listener {
             String resolvedPrefix,
             String resolvedDisplayName,
             String resolvedReputation,
+            String resolvedGroup,
             String messageText,
             String chatTypeName,
             String messageTime,
@@ -330,7 +332,14 @@ public final class ChatListener implements Listener {
                 result = result.append(buildBadgesComponent(sender, true));
                 currentIndex = tokenStart + badgesSpacedToken.length();
             } else {
-                result = result.append(buildChatMessageComponent(sender, messageText, chatTypeName, messageTime, messageId));
+                result = result.append(buildChatMessageComponent(
+                        sender,
+                        resolvedGroup,
+                        messageText,
+                        chatTypeName,
+                        messageTime,
+                        messageId
+                ));
                 currentIndex = tokenStart + messageToken.length();
             }
         }
@@ -342,9 +351,17 @@ public final class ChatListener implements Listener {
         return result;
     }
 
-    private Component buildChatMessageComponent(Player sender, String messageText, String chatTypeName, String messageTime, String messageId) {
+    private Component buildChatMessageComponent(
+            Player sender,
+            String resolvedGroup,
+            String messageText,
+            String chatTypeName,
+            String messageTime,
+            String messageId
+    ) {
         String resolvedMessage = messageText == null ? "" : messageText;
         Component messageComponent = parseLinksWithColoredText(resolvedMessage);
+        messageComponent = plugin.messageStyleService().apply(sender, resolvedGroup, messageComponent);
 
         if (!plugin.configuration().getBoolean("message-hover.enabled", true)) {
             return messageComponent;

@@ -10,6 +10,7 @@ import com.slyph.cloverchat.feature.automessage.AutoMessageService;
 import com.slyph.cloverchat.feature.censor.CensorService;
 import com.slyph.cloverchat.feature.headmessage.HeadMessageService;
 import com.slyph.cloverchat.feature.messageinspect.MessageAuditService;
+import com.slyph.cloverchat.feature.messagestyle.MessageStyleService;
 import com.slyph.cloverchat.feature.proxysync.VelocityProxyChatService;
 import com.slyph.cloverchat.feature.updatechecker.UpdateCheckerService;
 import com.slyph.cloverchat.listener.ChatListener;
@@ -51,6 +52,7 @@ public final class CloverChatPlugin extends JavaPlugin {
     private CensorService censorService;
     private HeadMessageService headMessageService;
     private MessageAuditService messageAuditService;
+    private MessageStyleService messageStyleService;
     private UpdateCheckerService updateCheckerService;
     private AutoMessageService autoMessageService;
     private VelocityProxyChatService velocityProxyChatService;
@@ -70,6 +72,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         censorService = new CensorService(this);
         headMessageService = new HeadMessageService(this);
         messageAuditService = new MessageAuditService(this);
+        messageStyleService = new MessageStyleService(this);
         updateCheckerService = new UpdateCheckerService(this);
         autoMessageService = new AutoMessageService(this);
         velocityProxyChatService = new VelocityProxyChatService(this);
@@ -172,6 +175,10 @@ public final class CloverChatPlugin extends JavaPlugin {
         return messageAuditService;
     }
 
+    public MessageStyleService messageStyleService() {
+        return messageStyleService;
+    }
+
     public CompatScheduler scheduler() {
         return compatScheduler;
     }
@@ -213,6 +220,9 @@ public final class CloverChatPlugin extends JavaPlugin {
         loadAdditionalConfigurations();
         if (censorService != null) {
             censorService.reload();
+        }
+        if (messageStyleService != null) {
+            messageStyleService.reload();
         }
         if (updateCheckerService != null) {
             updateCheckerService.restart();
