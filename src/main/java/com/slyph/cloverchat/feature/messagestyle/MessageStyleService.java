@@ -40,20 +40,29 @@ public final class MessageStyleService {
     }
 
     public Component apply(Player player, String ultraPermissionsGroup, Component message) {
-        if (!enabled || player == null || message == null) {
+        if (player == null || message == null) {
             return message;
         }
 
-        for (MessageStyleRule rule : rules) {
-            if (rule.matches(player, ultraPermissionsGroup)) {
-                return rule.style.apply(message);
+        Component styled = message;
+        if (enabled) {
+            boolean matched = false;
+            for (MessageStyleRule rule : rules) {
+                if (rule.matches(player, ultraPermissionsGroup)) {
+                    styled = rule.style.apply(message);
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched && fallbackStyle != null) {
+                styled = fallbackStyle.apply(message);
             }
         }
 
-        if (fallbackStyle != null) {
-            return fallbackStyle.apply(message);
+        if (plugin.cloverBadgesMessageColorBridge() != null) {
+            styled = plugin.cloverBadgesMessageColorBridge().apply(player, styled);
         }
-        return message;
+        return styled;
     }
 
     private MessageStyle readFallbackStyle(ConfigurationSection section) {
