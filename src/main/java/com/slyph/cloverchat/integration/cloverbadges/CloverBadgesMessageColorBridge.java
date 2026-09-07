@@ -96,52 +96,88 @@ public final class CloverBadgesMessageColorBridge {
     }
 
     private int legacyColor(char code) {
-        return switch (Character.toLowerCase(code)) {
-            case '0' -> 0x000000;
-            case '1' -> 0x0000AA;
-            case '2' -> 0x00AA00;
-            case '3' -> 0x00AAAA;
-            case '4' -> 0xAA0000;
-            case '5' -> 0xAA00AA;
-            case '6' -> 0xFFAA00;
-            case '7' -> 0xAAAAAA;
-            case '8' -> 0x555555;
-            case '9' -> 0x5555FF;
-            case 'a' -> 0x55FF55;
-            case 'b' -> 0x55FFFF;
-            case 'c' -> 0xFF5555;
-            case 'd' -> 0xFF55FF;
-            case 'e' -> 0xFFFF55;
-            default -> 0xFFFFFF;
-        };
+        switch (Character.toLowerCase(code)) {
+            case '0':
+                return 0x000000;
+            case '1':
+                return 0x0000AA;
+            case '2':
+                return 0x00AA00;
+            case '3':
+                return 0x00AAAA;
+            case '4':
+                return 0xAA0000;
+            case '5':
+                return 0xAA00AA;
+            case '6':
+                return 0xFFAA00;
+            case '7':
+                return 0xAAAAAA;
+            case '8':
+                return 0x555555;
+            case '9':
+                return 0x5555FF;
+            case 'a':
+                return 0x55FF55;
+            case 'b':
+                return 0x55FFFF;
+            case 'c':
+                return 0xFF5555;
+            case 'd':
+                return 0xFF55FF;
+            case 'e':
+                return 0xFFFF55;
+            default:
+                return 0xFFFFFF;
+        }
     }
 
     private Integer namedColor(String input) {
-        return switch (input.toLowerCase(Locale.ROOT).replace('-', '_').replace(' ', '_')) {
-            case "black" -> 0x000000;
-            case "dark_blue" -> 0x0000AA;
-            case "dark_green" -> 0x00AA00;
-            case "dark_aqua" -> 0x00AAAA;
-            case "dark_red" -> 0xAA0000;
-            case "dark_purple" -> 0xAA00AA;
-            case "gold" -> 0xFFAA00;
-            case "gray", "grey" -> 0xAAAAAA;
-            case "dark_gray", "dark_grey" -> 0x555555;
-            case "blue" -> 0x5555FF;
-            case "green" -> 0x55FF55;
-            case "aqua" -> 0x55FFFF;
-            case "red" -> 0xFF5555;
-            case "light_purple" -> 0xFF55FF;
-            case "yellow" -> 0xFFFF55;
-            case "white" -> 0xFFFFFF;
-            default -> null;
-        };
+        String normalized = input.toLowerCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
+        switch (normalized) {
+            case "black":
+                return 0x000000;
+            case "dark_blue":
+                return 0x0000AA;
+            case "dark_green":
+                return 0x00AA00;
+            case "dark_aqua":
+                return 0x00AAAA;
+            case "dark_red":
+                return 0xAA0000;
+            case "dark_purple":
+                return 0xAA00AA;
+            case "gold":
+                return 0xFFAA00;
+            case "gray":
+            case "grey":
+                return 0xAAAAAA;
+            case "dark_gray":
+            case "dark_grey":
+                return 0x555555;
+            case "blue":
+                return 0x5555FF;
+            case "green":
+                return 0x55FF55;
+            case "aqua":
+                return 0x55FFFF;
+            case "red":
+                return 0xFF5555;
+            case "light_purple":
+                return 0xFF55FF;
+            case "yellow":
+                return 0xFFFF55;
+            case "white":
+                return 0xFFFFFF;
+            default:
+                return null;
+        }
     }
 
     private int countCodePoints(Component component) {
         int length = 0;
-        if (component instanceof TextComponent textComponent) {
-            String content = textComponent.content();
+        if (component instanceof TextComponent) {
+            String content = ((TextComponent) component).content();
             length += content.codePointCount(0, content.length());
         }
         for (Component child : component.children()) {
@@ -154,8 +190,8 @@ public final class CloverBadgesMessageColorBridge {
         List<Component> originalChildren = component.children();
         Component result = component.children(List.of());
 
-        if (component instanceof TextComponent textComponent) {
-            String content = textComponent.content();
+        if (component instanceof TextComponent) {
+            String content = ((TextComponent) component).content();
             result = ((TextComponent) result).content("");
             int offset = 0;
             while (offset < content.length()) {
