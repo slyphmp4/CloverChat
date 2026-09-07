@@ -13,6 +13,7 @@ import com.slyph.cloverchat.feature.messageinspect.MessageAuditService;
 import com.slyph.cloverchat.feature.messagestyle.MessageStyleService;
 import com.slyph.cloverchat.feature.proxysync.VelocityProxyChatService;
 import com.slyph.cloverchat.feature.updatechecker.UpdateCheckerService;
+import com.slyph.cloverchat.integration.cloverbadges.CloverBadgesMessageColorBridge;
 import com.slyph.cloverchat.listener.ChatListener;
 import com.slyph.cloverchat.listener.CommandCooldownListener;
 import com.slyph.cloverchat.listener.JoinQuitListener;
@@ -53,6 +54,7 @@ public final class CloverChatPlugin extends JavaPlugin {
     private HeadMessageService headMessageService;
     private MessageAuditService messageAuditService;
     private MessageStyleService messageStyleService;
+    private CloverBadgesMessageColorBridge cloverBadgesMessageColorBridge;
     private UpdateCheckerService updateCheckerService;
     private AutoMessageService autoMessageService;
     private VelocityProxyChatService velocityProxyChatService;
@@ -73,6 +75,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         headMessageService = new HeadMessageService(this);
         messageAuditService = new MessageAuditService(this);
         messageStyleService = new MessageStyleService(this);
+        cloverBadgesMessageColorBridge = new CloverBadgesMessageColorBridge(this);
         updateCheckerService = new UpdateCheckerService(this);
         autoMessageService = new AutoMessageService(this);
         velocityProxyChatService = new VelocityProxyChatService(this);
@@ -177,6 +180,10 @@ public final class CloverChatPlugin extends JavaPlugin {
 
     public MessageStyleService messageStyleService() {
         return messageStyleService;
+    }
+
+    public CloverBadgesMessageColorBridge cloverBadgesMessageColorBridge() {
+        return cloverBadgesMessageColorBridge;
     }
 
     public CompatScheduler scheduler() {
