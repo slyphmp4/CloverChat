@@ -1,0 +1,72 @@
+name: Publish CloverChat v1.9.4
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/publish-v1.9.4.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.repository == 'slyphmp4/CloverChat'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Setup Java
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Grant Execute Permission
+        run: chmod +x gradlew
+
+      - name: Build
+        run: ./gradlew build --no-daemon --dependency-verification=strict
+
+      - name: Prepare release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f build/libs/CloverChat.jar
+          (
+            cd build/libs
+            sha256sum CloverChat.jar > CloverChat.jar.sha256
+          )
+          ./gradlew dependencies --configuration runtimeClasspath --no-daemon --dependency-verification=strict > build/libs/CloverChat-dependencies.txt
+          cat > release-notes.md <<'EOF'
+          ## What's new
+          - Added CloverBadges message color integration through PlaceholderAPI.
+          - Applies the selected message paint directly to the Adventure message component.
+          - Supports smooth per-character multi-stop gradients.
+          - Keeps prefixes, badges, nickname, reputation and chat separators untouched.
+          - Works with local, global and group chat routes.
+          - Personal CloverBadges message paint is applied after CloverChat's normal message style rules.
+          - Kept the integration compatible with the project's Java 11 source target.
+          EOF
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create v1.9.4 \
+            build/libs/CloverChat.jar \
+            build/libs/CloverChat.jar.sha256 \
+            build/libs/CloverChat-dependencies.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --target a65db22fb0414c07bc7e7e0f6c8cf5d35b10efbe \
+            --title "CloverChat v1.9.4" \
+            --notes-file release-notes.md \
+            --latest
