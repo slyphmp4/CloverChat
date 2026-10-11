@@ -41,6 +41,13 @@ public final class QuickPrivateMessageListener implements Listener {
         if (player.getUniqueId().equals(target.getUniqueId())) {
             return;
         }
+        try {
+            if (!player.canSee(target)) {
+                return;
+            }
+        } catch (Exception ignored) {
+            return;
+        }
 
         if (plugin.configuration().getBoolean("quick-pm.require-sneak", false) && !player.isSneaking()) {
             return;

@@ -7,10 +7,13 @@ import com.slyph.cloverchat.command.completer.CloverChatTabCompleter;
 import com.slyph.cloverchat.command.completer.PrivateMessageTabCompleter;
 import com.slyph.cloverchat.command.completer.ReloadTabCompleter;
 import com.slyph.cloverchat.feature.automessage.AutoMessageService;
+import com.slyph.cloverchat.feature.censor.CensorService;
 import com.slyph.cloverchat.feature.headmessage.HeadMessageService;
 import com.slyph.cloverchat.feature.messageinspect.MessageAuditService;
+import com.slyph.cloverchat.feature.messagestyle.MessageStyleService;
 import com.slyph.cloverchat.feature.proxysync.VelocityProxyChatService;
 import com.slyph.cloverchat.feature.updatechecker.UpdateCheckerService;
+import com.slyph.cloverchat.integration.cloverbadges.CloverBadgesMessageColorBridge;
 import com.slyph.cloverchat.listener.CardboardChatBridge;
 import com.slyph.cloverchat.listener.ChatListener;
 import com.slyph.cloverchat.listener.CommandCooldownListener;
@@ -29,6 +32,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -44,8 +51,11 @@ public final class CloverChatPlugin extends JavaPlugin {
 
     private boolean placeholderApiHooked;
     private CompatScheduler compatScheduler;
+    private CensorService censorService;
     private HeadMessageService headMessageService;
     private MessageAuditService messageAuditService;
+    private MessageStyleService messageStyleService;
+    private CloverBadgesMessageColorBridge cloverBadgesMessageColorBridge;
     private UpdateCheckerService updateCheckerService;
     private AutoMessageService autoMessageService;
     private VelocityProxyChatService velocityProxyChatService;
@@ -54,26 +64,33 @@ public final class CloverChatPlugin extends JavaPlugin {
     private FileConfiguration autoMessagesConfiguration;
     private boolean modernChatBridgeEnabled;
     private boolean cardboardCompatibilityMode;
+    private boolean fabricRuntime;
     private String activeLanguage = DEFAULT_LANGUAGE;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
         loadAdditionalConfigurations();
-        placeholderApiHooked = getServer().getPluginManager().getPlugin("PlaceholderAPI") != null;
+        placeholderApiHooked = getServer().getPluginManager().isPluginEnabled("PlaceholderAPI");
         compatScheduler = new CompatScheduler(this);
+        censorService = new CensorService(this);
         headMessageService = new HeadMessageService(this);
         messageAuditService = new MessageAuditService(this);
+        messageStyleService = new MessageStyleService(this);
+        cloverBadgesMessageColorBridge = new CloverBadgesMessageColorBridge(this);
         updateCheckerService = new UpdateCheckerService(this);
         autoMessageService = new AutoMessageService(this);
         velocityProxyChatService = new VelocityProxyChatService(this);
 
         ChatListener chatListener = new ChatListener(this);
         cardboardCompatibilityMode = isCardboardServer();
-        if (cardboardCompatibilityMode) {
+        fabricRuntime = isFabricRuntime();
+        if (fabricRuntime || cardboardCompatibilityMode) {
             modernChatBridgeEnabled = false;
             getServer().getPluginManager().registerEvents(chatListener, this);
-            getServer().getPluginManager().registerEvents(new CardboardChatBridge(chatListener), this);
+            if (cardboardCompatibilityMode) {
+                getServer().getPluginManager().registerEvents(new CardboardChatBridge(chatListener), this);
+            }
         } else {
             modernChatBridgeEnabled = new ModernChatBridge(this, chatListener).register();
             if (!modernChatBridgeEnabled) {
@@ -159,8 +176,20 @@ public final class CloverChatPlugin extends JavaPlugin {
         return headMessageService;
     }
 
+    public CensorService censorService() {
+        return censorService;
+    }
+
     public MessageAuditService messageAuditService() {
         return messageAuditService;
+    }
+
+    public MessageStyleService messageStyleService() {
+        return messageStyleService;
+    }
+
+    public CloverBadgesMessageColorBridge cloverBadgesMessageColorBridge() {
+        return cloverBadgesMessageColorBridge;
     }
 
     public CompatScheduler scheduler() {
@@ -202,6 +231,12 @@ public final class CloverChatPlugin extends JavaPlugin {
     public void reloadPluginConfiguration() {
         reloadConfig();
         loadAdditionalConfigurations();
+        if (censorService != null) {
+            censorService.reload();
+        }
+        if (messageStyleService != null) {
+            messageStyleService.reload();
+        }
         if (updateCheckerService != null) {
             updateCheckerService.restart();
         }
@@ -230,9 +265,27 @@ public final class CloverChatPlugin extends JavaPlugin {
         File messagesFile = ensureLanguageResourceFile(activeLanguage, "messages.yml");
         File hoversFile = ensureLanguageResourceFile(activeLanguage, "hovers.yml");
         File autoMessagesFile = ensureRootResourceFile("auto-messages.yml");
-        messagesConfiguration = YamlConfiguration.loadConfiguration(messagesFile);
-        hoversConfiguration = YamlConfiguration.loadConfiguration(hoversFile);
+        messagesConfiguration = loadWithDefaults(messagesFile, "langs/" + activeLanguage + "/messages.yml");
+        hoversConfiguration = loadWithDefaults(hoversFile, "langs/" + activeLanguage + "/hovers.yml");
         autoMessagesConfiguration = YamlConfiguration.loadConfiguration(autoMessagesFile);
+    }
+
+    private FileConfiguration loadWithDefaults(File file, String resourcePath) {
+        YamlConfiguration configuration = YamlConfiguration.loadConfiguration(file);
+        try (InputStream inputStream = getResource(resourcePath)) {
+            if (inputStream == null) {
+                return configuration;
+            }
+            YamlConfiguration defaults = YamlConfiguration.loadConfiguration(
+                    new InputStreamReader(inputStream, StandardCharsets.UTF_8)
+            );
+            configuration.setDefaults(defaults);
+            configuration.options().copyDefaults(true);
+            configuration.save(file);
+        } catch (IOException exception) {
+            getLogger().warning("Failed to update " + file.getName() + ": " + exception.getMessage());
+        }
+        return configuration;
     }
 
     private void ensureLanguageResources(String language) {
@@ -275,6 +328,15 @@ public final class CloverChatPlugin extends JavaPlugin {
         }
     }
 
+    private boolean isFabricRuntime() {
+        try {
+            Class.forName("net.fabricmc.loader.api.FabricLoader", false, getClass().getClassLoader());
+            return true;
+        } catch (ClassNotFoundException ignored) {
+            return false;
+        }
+    }
+
     private String normalizeLanguage(String input) {
         if (input == null) {
             return DEFAULT_LANGUAGE;
@@ -309,12 +371,13 @@ public final class CloverChatPlugin extends JavaPlugin {
         String schedulerMode = compatScheduler != null && compatScheduler.isFolia() ? "Folia" : "Paper/Spigot";
         String chatMode = cardboardCompatibilityMode
                 ? "AsyncPlayerChatEvent + PlayerChatEvent fallback"
-                : (modernChatBridgeEnabled ? "AsyncChatEvent (1.19+)" : "AsyncPlayerChatEvent");
+                : modernChatBridgeEnabled ? "AsyncChatEvent (Paper)"
+                : fabricRuntime ? "AsyncPlayerChatEvent (Fabric/Cardboard)" : "AsyncPlayerChatEvent";
 
         getLogger().info("");
         getLogger().info(LOG_TOP);
         getLogger().info(boxLine("CloverChat"));
-        getLogger().info(boxLine("Автор: slyphmp4"));
+        getLogger().info(boxLine("Автор: slyph"));
         getLogger().info(LOG_SEPARATOR);
         getLogger().info(boxLine("Версия: " + version));
         getLogger().info(boxLine("Язык: " + activeLanguage));

@@ -40,6 +40,10 @@ public final class CompatScheduler {
             }
         }
 
+        if (folia) {
+            return null;
+        }
+
         BukkitTask task = runBukkitSync(runnable);
         return wrap(task);
     }
@@ -51,10 +55,16 @@ public final class CompatScheduler {
 
         long delay = Math.max(0L, delayTicks);
         if (folia && globalRegionScheduler != null) {
-            Object task = invokeGlobalDelayed(globalRegionScheduler, runnable, delay);
+            Object task = delay == 0L
+                    ? invokeGlobalRun(globalRegionScheduler, runnable)
+                    : invokeGlobalDelayed(globalRegionScheduler, runnable, delay);
             if (task != null) {
                 return wrap(task);
             }
+        }
+
+        if (folia) {
+            return null;
         }
 
         BukkitTask task = runBukkitSyncLater(runnable, delay);
@@ -70,10 +80,14 @@ public final class CompatScheduler {
         long period = Math.max(1L, periodTicks);
 
         if (folia && globalRegionScheduler != null) {
-            Object task = invokeGlobalRepeating(globalRegionScheduler, runnable, delay, period);
+            Object task = invokeGlobalRepeating(globalRegionScheduler, runnable, Math.max(1L, delay), period);
             if (task != null) {
                 return wrap(task);
             }
+        }
+
+        if (folia) {
+            return null;
         }
 
         BukkitTask task = runBukkitSyncRepeating(runnable, delay, period);
@@ -90,6 +104,10 @@ public final class CompatScheduler {
             if (task != null) {
                 return wrap(task);
             }
+        }
+
+        if (folia) {
+            return null;
         }
 
         BukkitTask task = runBukkitAsync(runnable);
@@ -109,6 +127,10 @@ public final class CompatScheduler {
             if (task != null) {
                 return wrap(task);
             }
+        }
+
+        if (folia) {
+            return null;
         }
 
         BukkitTask task = runBukkitAsyncRepeating(runnable, delay, period);
@@ -136,7 +158,7 @@ public final class CompatScheduler {
                     return wrap(task);
                 }
             }
-            return runGlobalLater(runnable, delay);
+            return null;
         }
 
         BukkitTask task = runBukkitSyncLater(runnable, delay);
@@ -154,12 +176,12 @@ public final class CompatScheduler {
         if (folia) {
             Object scheduler = resolveEntityScheduler(entity);
             if (scheduler != null) {
-                Object task = invokeEntityRepeating(scheduler, runnable, delay, period);
+                Object task = invokeEntityRepeating(scheduler, runnable, Math.max(1L, delay), period);
                 if (task != null) {
                     return wrap(task);
                 }
             }
-            return runGlobalRepeating(runnable, delay, period);
+            return null;
         }
 
         BukkitTask task = runBukkitSyncRepeating(runnable, delay, period);
@@ -208,10 +230,15 @@ public final class CompatScheduler {
 
     private boolean detectFolia() {
         try {
-            Bukkit.class.getMethod("getGlobalRegionScheduler");
+            Class.forName(
+                    "io.papermc.paper.threadedregions.RegionizedServer",
+                    false,
+                    Bukkit.getServer().getClass().getClassLoader()
+            );
             return true;
-        } catch (Exception ignored) {
-            return false;
+        } catch (ClassNotFoundException ignored) {
+            String serverName = Bukkit.getName();
+            return serverName != null && serverName.toLowerCase().contains("folia");
         }
     }
 

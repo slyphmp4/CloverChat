@@ -4,7 +4,7 @@ main: com.slyph.cloverchat.CloverChatPlugin
 api-version: 1.16
 folia-supported: true
 authors: [slyph]
-softdepend: [PlaceholderAPI]
+softdepend: [PlaceholderAPI, CloverBadges]
 description: Настраиваемый чат для сервера
 
 commands:
@@ -40,6 +40,15 @@ permissions:
   cloverchat.command.inspect:
     description: Разрешает просмотр сообщения по ID
     default: op
+  cloverchat.command.inspect.all:
+    description: Разрешает просмотр сообщений закрытых групповых каналов
+    default: op
   cloverchat.commandcooldown.bypass:
     description: Обходит общий кулдаун команд
     default: op
+  cloverchat.message-style.admin:
+    description: Пример права на стиль сообщений администратора
+    default: false
+  cloverchat.message-style.vip:
+    description: Пример права на стиль сообщений VIP
+    default: false

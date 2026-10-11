@@ -74,6 +74,12 @@ proxy-sync:
   # Уникальное имя этого backend-сервера
   server-id: "survival"
 
+  # Одинаковый секрет минимум из 32 символов на всех backend-серверах
+  # Рекомендуется не хранить секрет здесь, а задать переменную окружения:
+  # CLOVERCHAT_PROXY_SECRET
+  # Синхронизация не запустится с пустым или коротким секретом
+  shared-secret: ""
+
   # Куда отправлять: ALL или конкретное имя backend-сервера
   target-server: "ALL"
 
@@ -82,6 +88,12 @@ proxy-sync:
 
   # Время хранения ID сообщений для защиты от дублей
   dedup-cache-seconds: 120
+
+  # Максимальный возраст входящего сообщения
+  max-message-age-seconds: 45
+
+  # Максимальное количество ID в памяти для защиты от переполнения
+  max-dedup-entries: 10000
 
   # Подробные логи синхронизации
   debug-log: false
@@ -159,6 +171,125 @@ global-chat:
 
 # ----------------------------
 # Ваши заметки (LOCAL/GLOBAL)
+#
+#
+#
+# ----------------------------
+
+
+# ============================================================
+# MESSAGE STYLES BY PERMISSION OR ULTRAPERMISSIONS GROUP
+# ============================================================
+# Здесь настраивается внешний вид только текста сообщения игрока.
+# Ник, префикс, репутация и значки не изменяются.
+# Hover сообщения и интерактивные действия ссылок сохраняются.
+#
+# Как работает выбор:
+# 1) Плагин берет все включенные правила.
+# 2) Сначала проверяет правило с самым большим priority.
+# 3) Применяет только первое подходящее правило.
+#
+# selector.type:
+# PERMISSION             - проверка права игрока.
+# ULTRAPERMISSIONS_GROUP - точное имя основной группы UltraPermissions.
+# Для PERMISSION можно указать любое право из вашей системы прав.
+#
+# Для ULTRAPERMISSIONS_GROUP нужны PlaceholderAPI и плейсхолдер
+# %uperms_group%. В value указывается ID группы, например: admin,
+# moderator, vip или default. Это не цветной префикс группы.
+#
+# Поддерживаемые цвета:
+# &#FF5555, &FF5555, #FF5555, &c или название red/gold/aqua.
+# color: "" или color: "none" оставляет цвет без переопределения.
+#
+# gradient.enabled: true включает градиент вместо обычного color.
+# В gradient.colors нужно указать минимум 2 цвета.
+# Можно указать 3 и больше цветов для сложного плавного перехода.
+# Если градиент выключен или настроен неправильно, используется color.
+#
+# bold         - жирный текст
+# italic       - курсив
+# underlined   - подчеркнутый текст
+# strikethrough - зачеркнутый текст
+#
+# После изменения используйте: /cloverchatreload confirm
+
+message-styles:
+  enabled: true
+
+  fallback:
+    # Включите, если нужен один стиль для всех, кому не подошло ни одно правило
+    enabled: false
+    color: "&f"
+    gradient:
+      enabled: false
+      colors:
+        - "&#CBFFF7"
+        - "&#90FFE7"
+    bold: false
+    italic: false
+    underlined: false
+    strikethrough: false
+
+  rules:
+    admin-permission:
+      enabled: true
+      priority: 200
+      selector:
+        type: "PERMISSION"
+        value: "cloverchat.message-style.admin"
+      style:
+        color: "&#FF6B6B"
+        gradient:
+          enabled: false
+          colors:
+            - "&#FF5555"
+            - "&#FFB86C"
+        bold: true
+        italic: false
+        underlined: false
+        strikethrough: false
+
+    vip-permission:
+      enabled: true
+      priority: 100
+      selector:
+        type: "PERMISSION"
+        value: "cloverchat.message-style.vip"
+      style:
+        color: "&#FFD667"
+        gradient:
+          enabled: false
+          colors:
+            - "&#FFD667"
+            - "&#FFF3D6"
+        bold: false
+        italic: false
+        underlined: false
+        strikethrough: false
+
+    ultrapermissions-admin-group:
+      # Выключено как пример. Поменяйте на true для группы admin
+      enabled: false
+      priority: 300
+      selector:
+        type: "ULTRAPERMISSIONS_GROUP"
+        value: "admin"
+      style:
+        color: "&#FF5555"
+        gradient:
+          enabled: true
+          colors:
+            - "&#FF5555"
+            - "&#FFB86C"
+            - "&#FFF3D6"
+        bold: true
+        italic: false
+        underlined: true
+        strikethrough: false
+
+# ----------------------------
+# Ваши заметки (MESSAGE STYLES)
 #
 #
 #
@@ -403,6 +534,10 @@ censor:
 message-inspector:
   enabled: true
 
+  # Сколько дней хранить записи в БД и JSONL-бекапы
+  # 0 - хранить без ограничения
+  retention-days: 90
+
   database:
     mode: "LOCAL"
     retry-connect-seconds: 15
@@ -415,10 +550,14 @@ message-inspector:
       host: "127.0.0.1"
       port: 3306
       database: "cloverchat"
+      # Можно задать через CLOVERCHAT_DB_USERNAME
       username: "root"
+      # Рекомендуется задать через CLOVERCHAT_DB_PASSWORD
       password: "change_me"
-      use-ssl: false
-      allow-public-key-retrieval: true
+      # DISABLED, PREFERRED, REQUIRED, VERIFY_CA или VERIFY_IDENTITY
+      ssl-mode: "VERIFY_IDENTITY"
+      # Включайте только если это действительно требуется вашей MySQL
+      allow-public-key-retrieval: false
       server-timezone: "UTC"
 
     hikari:
@@ -442,3 +581,4 @@ message-inspector:
   backup:
     enabled: true
     folder: "backups/message-inspector"
+    max-file-size-mb: 64

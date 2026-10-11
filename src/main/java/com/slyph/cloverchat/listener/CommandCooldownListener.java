@@ -7,16 +7,16 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class CommandCooldownListener implements Listener {
 
     private final CloverChatPlugin plugin;
-    private final Map<UUID, Long> lastCommandTime = new HashMap<>();
+    private final Map<UUID, Long> lastCommandTime = new ConcurrentHashMap<>();
 
     public CommandCooldownListener(CloverChatPlugin plugin) {
         this.plugin = plugin;
@@ -39,7 +39,10 @@ public final class CommandCooldownListener implements Listener {
             return;
         }
 
-        long cooldownSeconds = plugin.configuration().getLong("commands-cooldown.seconds", 5);
+        long cooldownSeconds = Math.max(0L, Math.min(
+                plugin.configuration().getLong("commands-cooldown.seconds", 5),
+                86400L
+        ));
         long cooldownMillis = cooldownSeconds * 1000L;
 
         long now = System.currentTimeMillis();
@@ -65,6 +68,10 @@ public final class CommandCooldownListener implements Listener {
         }
 
         lastCommandTime.put(player.getUniqueId(), now);
+        if (lastCommandTime.size() >= 1000) {
+            long cutoff = now - 3600000L;
+            lastCommandTime.entrySet().removeIf(entry -> entry.getValue() < cutoff);
+        }
     }
 
     private String extractBaseCommand(String raw) {

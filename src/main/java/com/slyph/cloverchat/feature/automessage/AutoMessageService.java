@@ -76,10 +76,15 @@ public final class AutoMessageService {
         }
 
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (!entry.permission.isEmpty() && !player.hasPermission(entry.permission)) {
-                continue;
-            }
-            plugin.sendConfiguredLines(player, player, entry.lines);
+            plugin.scheduler().runEntity(player, () -> {
+                if (!player.isOnline()) {
+                    return;
+                }
+                if (!entry.permission.isEmpty() && !player.hasPermission(entry.permission)) {
+                    return;
+                }
+                plugin.sendConfiguredLines(player, player, entry.lines);
+            });
         }
     }
 

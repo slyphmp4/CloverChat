@@ -8,6 +8,7 @@ import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.UUID;
@@ -17,6 +18,8 @@ public final class HeadMessageService {
 
     private final CloverChatPlugin plugin;
     private final Map<UUID, ActiveHeadMessage> activeMessages = new ConcurrentHashMap<>();
+    private volatile Method teleportAsyncMethod;
+    private volatile boolean teleportAsyncResolved;
 
     public HeadMessageService(CloverChatPlugin plugin) {
         this.plugin = plugin;
@@ -26,7 +29,6 @@ public final class HeadMessageService {
         if (player == null || !player.isOnline()) {
             return;
         }
-
         if (!plugin.configuration().getBoolean("chat-above-head.enabled", true)) {
             return;
         }
@@ -36,7 +38,8 @@ public final class HeadMessageService {
             return;
         }
 
-        plugin.scheduler().runEntity(player, () -> showInternal(player.getUniqueId(), source));
+        UUID playerId = player.getUniqueId();
+        plugin.scheduler().runEntity(player, () -> showInternal(playerId, source));
     }
 
     private void showInternal(UUID playerId, String source) {
@@ -49,18 +52,18 @@ public final class HeadMessageService {
         String prepared = source.length() > maxLength && maxLength > 3
                 ? source.substring(0, maxLength - 3) + "..."
                 : source;
-
         long durationSeconds = Math.max(1L, plugin.configuration().getLong("chat-above-head.duration-seconds", 4L));
         double yOffset = plugin.configuration().getDouble("chat-above-head.y-offset", 2.25D);
         long now = System.currentTimeMillis();
         long expiresAt = now + durationSeconds * 1000L;
 
         ActiveHeadMessage active = activeMessages.get(playerId);
-        if (active != null && active.isAlive(player) && now <= active.expiresAtMillis) {
+        if (active != null && now <= active.expiresAtMillis) {
             active.comboCount += 1;
             active.expiresAtMillis = expiresAt;
             active.yOffset = yOffset;
-            active.stand.setCustomName(buildRendered(player, prepared, active.comboCount));
+            String rendered = buildRendered(player, prepared, active.comboCount);
+            updateStand(playerId, player, active, prepared, rendered);
             return;
         }
 
@@ -84,34 +87,100 @@ public final class HeadMessageService {
         created.expiresAtMillis = expiresAt;
         created.yOffset = yOffset;
         stand.setCustomName(buildRendered(player, prepared, created.comboCount));
+        activeMessages.put(playerId, created);
 
-        CompatScheduler.TaskHandle followTask = plugin.scheduler().runEntityRepeating(player, 0L, 2L, () -> {
-            Player currentPlayer = Bukkit.getPlayer(playerId);
-            if (currentPlayer == null || !currentPlayer.isOnline() || currentPlayer.isDead()) {
+        CompatScheduler.TaskHandle followTask = plugin.scheduler().runEntityRepeating(player, 1L, 2L, () -> {
+            if (!player.isOnline() || player.isDead() || System.currentTimeMillis() >= created.expiresAtMillis) {
                 clear(playerId);
                 return;
             }
-
-            if (System.currentTimeMillis() >= created.expiresAtMillis) {
-                clear(playerId);
+            if (activeMessages.get(playerId) != created) {
+                if (created.task != null) {
+                    created.task.cancel();
+                }
                 return;
             }
-
-            if (!created.stand.isValid()) {
-                clear(playerId);
-                return;
-            }
-
-            if (!created.stand.getWorld().equals(currentPlayer.getWorld())) {
-                clear(playerId);
-                return;
-            }
-
-            created.stand.teleport(currentPlayer.getLocation().add(0.0D, created.yOffset, 0.0D));
+            moveStand(playerId, created, player.getLocation().add(0.0D, created.yOffset, 0.0D));
         });
 
         created.task = followTask;
-        activeMessages.put(playerId, created);
+        if (followTask == null) {
+            activeMessages.remove(playerId, created);
+            stand.remove();
+        }
+    }
+
+    private void updateStand(
+            UUID playerId,
+            Player player,
+            ActiveHeadMessage active,
+            String prepared,
+            String rendered
+    ) {
+        CompatScheduler.TaskHandle handle = plugin.scheduler().runEntity(active.stand, () -> {
+            if (activeMessages.get(playerId) != active) {
+                return;
+            }
+            if (active.stand.isValid()) {
+                active.stand.setCustomName(rendered);
+                return;
+            }
+            if (activeMessages.remove(playerId, active) && active.task != null) {
+                active.task.cancel();
+            }
+            plugin.scheduler().runEntity(player, () -> showInternal(playerId, prepared));
+        });
+        if (handle == null) {
+            activeMessages.remove(playerId, active);
+            if (active.task != null) {
+                active.task.cancel();
+            }
+        }
+    }
+
+    private void moveStand(UUID playerId, ActiveHeadMessage active, Location destination) {
+        plugin.scheduler().runEntity(active.stand, () -> {
+            if (activeMessages.get(playerId) != active || !active.stand.isValid()) {
+                return;
+            }
+            if (!plugin.scheduler().isFolia()) {
+                active.stand.teleport(destination);
+                return;
+            }
+            if (!teleportAsync(active.stand, destination)) {
+                activeMessages.remove(playerId, active);
+                if (active.task != null) {
+                    active.task.cancel();
+                }
+                active.stand.remove();
+            }
+        });
+    }
+
+    private boolean teleportAsync(ArmorStand stand, Location destination) {
+        Method method = teleportAsyncMethod;
+        if (!teleportAsyncResolved) {
+            synchronized (this) {
+                if (!teleportAsyncResolved) {
+                    try {
+                        teleportAsyncMethod = stand.getClass().getMethod("teleportAsync", Location.class);
+                    } catch (Exception ignored) {
+                        teleportAsyncMethod = null;
+                    }
+                    teleportAsyncResolved = true;
+                }
+                method = teleportAsyncMethod;
+            }
+        }
+        if (method == null) {
+            return false;
+        }
+        try {
+            method.invoke(stand, destination);
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     public void clear(UUID playerId) {
@@ -119,19 +188,14 @@ public final class HeadMessageService {
         if (active == null) {
             return;
         }
-
         if (active.task != null) {
             active.task.cancel();
         }
-        Runnable removeTask = () -> {
+        plugin.scheduler().runEntity(active.stand, () -> {
             if (active.stand.isValid()) {
                 active.stand.remove();
             }
-        };
-        CompatScheduler.TaskHandle handle = plugin.scheduler().runEntity(active.stand, removeTask);
-        if (handle == null) {
-            plugin.scheduler().runGlobal(removeTask);
-        }
+        });
     }
 
     public void clearAll() {
@@ -140,43 +204,37 @@ public final class HeadMessageService {
         }
     }
 
-    private static final class ActiveHeadMessage {
-
-        private final ArmorStand stand;
-        private CompatScheduler.TaskHandle task;
-        private int comboCount;
-        private long expiresAtMillis;
-        private double yOffset;
-
-        private ActiveHeadMessage(ArmorStand stand) {
-            this.stand = stand;
-        }
-
-        private boolean isAlive(Player player) {
-            return player != null
-                    && player.isOnline()
-                    && !player.isDead()
-                    && stand.isValid()
-                    && stand.getWorld().equals(player.getWorld());
-        }
-    }
-
     private String buildRendered(Player player, String message, int comboCount) {
         String format = plugin.messages().getString("chat-above-head.format", "&#8fe8ff%message%");
-        String rendered = format
-                .replace("%message%", message)
+        String messageToken = "__cloverchat_head_message__";
+        String rendered = (format == null ? "" : format)
+                .replace("%message%", messageToken)
                 .replace("%player_name%", player.getName());
 
         if (plugin.configuration().getBoolean("chat-above-head.combo-enabled", true) && comboCount > 1) {
             int comboExtra = comboCount - 1;
             String comboFormat = plugin.messages().getString("chat-above-head.combo-format", " &#9fff9f(+%combo%)");
-            String suffix = comboFormat
+            String suffix = (comboFormat == null ? "" : comboFormat)
                     .replace("%combo%", String.valueOf(comboExtra))
                     .replace("%combo_total%", String.valueOf(comboCount));
             rendered = rendered + suffix;
         }
 
         rendered = plugin.applyPlaceholders(player, rendered);
+        rendered = rendered.replace(messageToken, message);
         return plugin.applyColor(rendered);
+    }
+
+    private static final class ActiveHeadMessage {
+
+        private final ArmorStand stand;
+        private volatile CompatScheduler.TaskHandle task;
+        private volatile int comboCount;
+        private volatile long expiresAtMillis;
+        private volatile double yOffset;
+
+        private ActiveHeadMessage(ArmorStand stand) {
+            this.stand = stand;
+        }
     }
 }

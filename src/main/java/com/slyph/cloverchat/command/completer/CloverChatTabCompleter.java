@@ -33,6 +33,9 @@ public final class CloverChatTabCompleter implements TabCompleter {
         }
 
         if (args.length == 2 && args[0].equalsIgnoreCase("inspect")) {
+            if (!sender.hasPermission("cloverchat.command.inspect.all")) {
+                return Collections.emptyList();
+            }
             String prefix = args[1];
             List<String> ids = plugin.messageAuditService().completeMessageIds(prefix, 25);
             if (ids.isEmpty()) {

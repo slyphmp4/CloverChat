@@ -76,7 +76,7 @@ public final class ModernChatBridge {
             setCancelledMethod.invoke(event, true);
             Object rawMessage = messageMethod.invoke(event);
             String message = resolveMessageText(rawMessage);
-            chatListener.handleIncomingChat(player.getUniqueId(), message);
+            chatListener.handleIncomingChat(player, message);
         } catch (Exception exception) {
             if (!executionErrorLogged) {
                 executionErrorLogged = true;

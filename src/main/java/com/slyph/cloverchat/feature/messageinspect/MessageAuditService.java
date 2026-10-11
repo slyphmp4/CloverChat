@@ -9,8 +9,10 @@ import com.zaxxer.hikari.HikariDataSource;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -29,6 +31,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
@@ -42,7 +45,9 @@ public final class MessageAuditService {
     private final AtomicInteger queueSize = new AtomicInteger(0);
     private final ConcurrentHashMap<String, ChatMessageAuditRecord> recentRecords = new ConcurrentHashMap<>();
     private final ConcurrentLinkedDeque<String> recentOrder = new ConcurrentLinkedDeque<>();
+    private final Set<String> backedUpPendingIds = ConcurrentHashMap.newKeySet();
     private final Object datasourceLock = new Object();
+    private final AtomicBoolean flushRunning = new AtomicBoolean(false);
 
     private CompatScheduler.TaskHandle flushTask;
     private CompatScheduler.TaskHandle healthTask;
@@ -51,6 +56,8 @@ public final class MessageAuditService {
     private volatile long lastConnectionErrorLogMillis;
     private volatile long lastInsertErrorLogMillis;
     private volatile long lastBackupErrorLogMillis;
+    private volatile long lastQueueOverflowLogMillis;
+    private volatile long lastRetentionRunMillis;
     private volatile String activeProfileName = "LOCAL-SQLITE";
     private volatile DatabaseDialect activeDialect = DatabaseDialect.SQLITE;
 
@@ -64,9 +71,15 @@ public final class MessageAuditService {
             return;
         }
 
-        ensureDataSource();
-        long flushIntervalTicks = Math.max(20L, plugin.configuration().getLong("message-inspector.writer.flush-interval-ticks", 40L));
-        long healthIntervalTicks = Math.max(200L, plugin.configuration().getLong("message-inspector.database.health-check-interval-ticks", 1200L));
+        plugin.scheduler().runAsync(this::ensureDataSource);
+        long flushIntervalTicks = Math.max(20L, Math.min(
+                plugin.configuration().getLong("message-inspector.writer.flush-interval-ticks", 40L),
+                1200L
+        ));
+        long healthIntervalTicks = Math.max(200L, Math.min(
+                plugin.configuration().getLong("message-inspector.database.health-check-interval-ticks", 1200L),
+                72000L
+        ));
         flushTask = plugin.scheduler().runAsyncRepeating(this::flushSafely, flushIntervalTicks, flushIntervalTicks);
         healthTask = plugin.scheduler().runAsyncRepeating(this::healthCheckSafely, healthIntervalTicks, healthIntervalTicks);
     }
@@ -110,7 +123,7 @@ public final class MessageAuditService {
 
     public List<String> completeMessageIds(String prefix, int limit) {
         String normalized = prefix == null ? "" : prefix.toLowerCase(Locale.ROOT);
-        int max = Math.max(1, limit);
+        int max = Math.max(1, Math.min(limit, 100));
         List<String> result = new ArrayList<>();
         Set<String> seen = new HashSet<>();
 
@@ -146,20 +159,20 @@ public final class MessageAuditService {
 
         String id = messageId == null ? "" : messageId.trim();
         if (id.isBlank()) {
-            plugin.scheduler().runGlobal(() -> onResult.accept(null));
+            onResult.accept(null);
             return;
         }
 
         plugin.scheduler().runAsync(() -> {
             try {
                 ChatMessageAuditRecord result = findByMessageId(id);
-                plugin.scheduler().runGlobal(() -> onResult.accept(result));
+                onResult.accept(result);
             } catch (Throwable throwable) {
                 if (onError != null) {
-                    plugin.scheduler().runGlobal(() -> onError.accept(throwable));
+                    onError.accept(throwable);
                     return;
                 }
-                plugin.scheduler().runGlobal(() -> onResult.accept(null));
+                onResult.accept(null);
             }
         });
     }
@@ -270,7 +283,10 @@ public final class MessageAuditService {
     }
 
     private void trimRecentCache() {
-        int limit = Math.max(50, plugin.configuration().getInt("message-inspector.cache.recent-ids-limit", 500));
+        int limit = Math.max(50, Math.min(
+                plugin.configuration().getInt("message-inspector.cache.recent-ids-limit", 500),
+                10000
+        ));
         while (recentOrder.size() > limit) {
             String removed = recentOrder.pollFirst();
             if (removed == null) {
@@ -284,21 +300,28 @@ public final class MessageAuditService {
         writeQueue.addLast(record);
         queueSize.incrementAndGet();
 
-        int queueLimit = Math.max(1000, plugin.configuration().getInt("message-inspector.writer.queue-limit", 10000));
+        int queueLimit = queueLimit();
         while (queueSize.get() > queueLimit) {
             ChatMessageAuditRecord removed = writeQueue.pollFirst();
             if (removed == null) {
                 break;
             }
             queueSize.decrementAndGet();
+            backedUpPendingIds.remove(removed.messageId());
+            logQueueOverflow();
         }
     }
 
     private void flushSafely() {
+        if (!flushRunning.compareAndSet(false, true)) {
+            return;
+        }
         try {
             flushNow();
         } catch (Exception exception) {
             logInsertError("Message audit flush failed: " + exception.getMessage());
+        } finally {
+            flushRunning.set(false);
         }
     }
 
@@ -322,6 +345,7 @@ public final class MessageAuditService {
         try (Connection connection = dataSource.getConnection();
              Statement statement = connection.createStatement()) {
             statement.execute("SELECT 1");
+            runRetentionIfNeeded(connection);
         } catch (Exception exception) {
             closeDataSource();
             logConnectionError("Message audit database ping failed: " + exception.getMessage());
@@ -334,13 +358,29 @@ public final class MessageAuditService {
             return;
         }
 
-        int batchSize = Math.max(10, plugin.configuration().getInt("message-inspector.writer.batch-size", 100));
+        int batchSize = Math.max(10, Math.min(
+                plugin.configuration().getInt("message-inspector.writer.batch-size", 100),
+                1000
+        ));
         List<ChatMessageAuditRecord> batch = pollBatch(batchSize);
         if (batch.isEmpty()) {
             return;
         }
 
-        writeBackup(batch);
+        List<ChatMessageAuditRecord> backupBatch = new ArrayList<>();
+        for (ChatMessageAuditRecord record : batch) {
+            if (!backedUpPendingIds.contains(record.messageId())) {
+                backupBatch.add(record);
+            }
+        }
+        if (!backupBatch.isEmpty()) {
+            boolean backupEnabled = plugin.configuration().getBoolean("message-inspector.backup.enabled", true);
+            if (writeBackup(backupBatch) && backupEnabled) {
+                for (ChatMessageAuditRecord record : backupBatch) {
+                    backedUpPendingIds.add(record.messageId());
+                }
+            }
+        }
 
         if (!ensureDataSource()) {
             requeueFront(batch);
@@ -349,6 +389,9 @@ public final class MessageAuditService {
 
         try {
             insertBatch(batch);
+            for (ChatMessageAuditRecord record : batch) {
+                backedUpPendingIds.remove(record.messageId());
+            }
         } catch (Exception exception) {
             closeDataSource();
             requeueFront(batch);
@@ -359,6 +402,7 @@ public final class MessageAuditService {
     private void clearQueue() {
         writeQueue.clear();
         queueSize.set(0);
+        backedUpPendingIds.clear();
     }
 
     private List<ChatMessageAuditRecord> pollBatch(int size) {
@@ -379,13 +423,15 @@ public final class MessageAuditService {
             writeQueue.addFirst(batch.get(index));
             queueSize.incrementAndGet();
         }
-        int queueLimit = Math.max(1000, plugin.configuration().getInt("message-inspector.writer.queue-limit", 10000));
+        int queueLimit = queueLimit();
         while (queueSize.get() > queueLimit) {
             ChatMessageAuditRecord removed = writeQueue.pollFirst();
             if (removed == null) {
                 break;
             }
             queueSize.decrementAndGet();
+            backedUpPendingIds.remove(removed.messageId());
+            logQueueOverflow();
         }
     }
 
@@ -394,7 +440,10 @@ public final class MessageAuditService {
             return true;
         }
 
-        long retryMillis = Math.max(5L, plugin.configuration().getLong("message-inspector.database.retry-connect-seconds", 15L)) * 1000L;
+        long retryMillis = Math.max(5L, Math.min(
+                plugin.configuration().getLong("message-inspector.database.retry-connect-seconds", 15L),
+                3600L
+        )) * 1000L;
         long now = System.currentTimeMillis();
         if (now - lastConnectAttemptMillis < retryMillis) {
             return false;
@@ -410,13 +459,20 @@ public final class MessageAuditService {
             }
             lastConnectAttemptMillis = now;
 
+            HikariDataSource newDataSource = null;
             try {
-                HikariDataSource newDataSource = createDataSource();
+                newDataSource = createDataSource();
                 createTableIfNeeded(newDataSource);
                 dataSource = newDataSource;
                 plugin.getLogger().info("[MessageInspector] Database connection is ready (" + activeProfileName + ")");
                 return true;
             } catch (Exception exception) {
+                if (newDataSource != null) {
+                    try {
+                        newDataSource.close();
+                    } catch (Exception ignored) {
+                    }
+                }
                 logConnectionError("Message inspector connection failed: " + exception.getMessage());
                 return false;
             }
@@ -439,15 +495,17 @@ public final class MessageAuditService {
     private HikariDataSource createLocalSqliteDataSource() {
         File localDatabaseFile = resolveLocalDatabaseFile();
         String jdbcUrl = buildSqliteJdbcUrl(localDatabaseFile);
-        String poolName = plugin.configuration().getString("message-inspector.database.hikari.pool-name", "CloverChat-MessageInspector");
+        String poolName = poolName();
+        long connectionTimeout = connectionTimeout();
+        long validationTimeout = validationTimeout(connectionTimeout);
 
         HikariConfig hikariConfig = new HikariConfig();
         hikariConfig.setPoolName(poolName + "-SQLite");
         hikariConfig.setJdbcUrl(jdbcUrl);
         hikariConfig.setMaximumPoolSize(1);
         hikariConfig.setMinimumIdle(1);
-        hikariConfig.setConnectionTimeout(Math.max(3000L, plugin.configuration().getLong("message-inspector.database.hikari.connection-timeout-ms", 10000L)));
-        hikariConfig.setValidationTimeout(Math.max(1000L, plugin.configuration().getLong("message-inspector.database.hikari.validation-timeout-ms", 5000L)));
+        hikariConfig.setConnectionTimeout(connectionTimeout);
+        hikariConfig.setValidationTimeout(validationTimeout);
         hikariConfig.setInitializationFailTimeout(-1L);
         hikariConfig.setConnectionTestQuery("SELECT 1");
         hikariConfig.setIdleTimeout(0L);
@@ -461,25 +519,45 @@ public final class MessageAuditService {
         String host = plugin.configuration().getString(basePath + ".host", "127.0.0.1");
         int port = plugin.configuration().getInt(basePath + ".port", 3306);
         String database = plugin.configuration().getString(basePath + ".database", "cloverchat");
-        String username = plugin.configuration().getString(basePath + ".username", "root");
-        String password = plugin.configuration().getString(basePath + ".password", "");
-        boolean useSsl = plugin.configuration().getBoolean(basePath + ".use-ssl", false);
-        boolean allowPublicKeyRetrieval = plugin.configuration().getBoolean(basePath + ".allow-public-key-retrieval", true);
+        String username = environmentOrConfig("CLOVERCHAT_DB_USERNAME", basePath + ".username", "root");
+        String password = environmentOrConfig("CLOVERCHAT_DB_PASSWORD", basePath + ".password", "");
+        String sslMode = normalizeSslMode(plugin.configuration().getString(basePath + ".ssl-mode", "VERIFY_IDENTITY"));
+        boolean allowPublicKeyRetrieval = plugin.configuration().getBoolean(basePath + ".allow-public-key-retrieval", false);
         String timezone = plugin.configuration().getString(basePath + ".server-timezone", "UTC");
-        String jdbcUrl = buildMySqlJdbcUrl(host, port, database, useSsl, allowPublicKeyRetrieval, timezone);
+        String jdbcUrl = buildMySqlJdbcUrl(host, port, database, sslMode, allowPublicKeyRetrieval, timezone);
 
         HikariConfig hikariConfig = new HikariConfig();
-        hikariConfig.setPoolName(plugin.configuration().getString("message-inspector.database.hikari.pool-name", "CloverChat-MessageInspector"));
+        hikariConfig.setPoolName(poolName());
         hikariConfig.setJdbcUrl(jdbcUrl);
         hikariConfig.setUsername(username);
         hikariConfig.setPassword(password);
-        hikariConfig.setMaximumPoolSize(Math.max(2, plugin.configuration().getInt("message-inspector.database.hikari.maximum-pool-size", 8)));
-        hikariConfig.setMinimumIdle(Math.max(1, plugin.configuration().getInt("message-inspector.database.hikari.minimum-idle", 2)));
-        hikariConfig.setConnectionTimeout(Math.max(3000L, plugin.configuration().getLong("message-inspector.database.hikari.connection-timeout-ms", 10000L)));
-        hikariConfig.setValidationTimeout(Math.max(1000L, plugin.configuration().getLong("message-inspector.database.hikari.validation-timeout-ms", 5000L)));
-        hikariConfig.setIdleTimeout(Math.max(10000L, plugin.configuration().getLong("message-inspector.database.hikari.idle-timeout-ms", 600000L)));
-        hikariConfig.setMaxLifetime(Math.max(60000L, plugin.configuration().getLong("message-inspector.database.hikari.max-lifetime-ms", 1800000L)));
-        hikariConfig.setKeepaliveTime(Math.max(30000L, plugin.configuration().getLong("message-inspector.database.hikari.keepalive-time-ms", 300000L)));
+        int maximumPoolSize = Math.max(2, Math.min(
+                plugin.configuration().getInt("message-inspector.database.hikari.maximum-pool-size", 8),
+                64
+        ));
+        int minimumIdle = Math.max(1, Math.min(
+                plugin.configuration().getInt("message-inspector.database.hikari.minimum-idle", 2),
+                maximumPoolSize
+        ));
+        hikariConfig.setMaximumPoolSize(maximumPoolSize);
+        hikariConfig.setMinimumIdle(minimumIdle);
+        long connectionTimeout = connectionTimeout();
+        long maxLifetime = Math.max(60000L, Math.min(
+                plugin.configuration().getLong("message-inspector.database.hikari.max-lifetime-ms", 1800000L),
+                86400000L
+        ));
+        long keepaliveTime = Math.max(30000L, Math.min(
+                plugin.configuration().getLong("message-inspector.database.hikari.keepalive-time-ms", 300000L),
+                maxLifetime / 2L
+        ));
+        hikariConfig.setConnectionTimeout(connectionTimeout);
+        hikariConfig.setValidationTimeout(validationTimeout(connectionTimeout));
+        hikariConfig.setIdleTimeout(Math.max(10000L, Math.min(
+                plugin.configuration().getLong("message-inspector.database.hikari.idle-timeout-ms", 600000L),
+                3600000L
+        )));
+        hikariConfig.setMaxLifetime(maxLifetime);
+        hikariConfig.setKeepaliveTime(keepaliveTime);
         hikariConfig.setInitializationFailTimeout(-1L);
         hikariConfig.setConnectionTestQuery("SELECT 1");
         hikariConfig.addDataSourceProperty("cachePrepStmts", "true");
@@ -495,20 +573,85 @@ public final class MessageAuditService {
             String host,
             int port,
             String database,
-            boolean useSsl,
+            String sslMode,
             boolean allowPublicKeyRetrieval,
             String timezone
     ) {
-        String resolvedHost = host == null || host.isBlank() ? "127.0.0.1" : host;
-        int resolvedPort = port <= 0 ? 3306 : port;
-        String resolvedDatabase = database == null || database.isBlank() ? "cloverchat" : database;
+        String resolvedHost = host != null && host.matches("[A-Za-z0-9.\\-\\[\\]:]{1,255}")
+                ? host
+                : "127.0.0.1";
+        int resolvedPort = port >= 1 && port <= 65535 ? port : 3306;
+        String resolvedDatabase = database != null && database.matches("[A-Za-z0-9_$-]{1,64}")
+                ? database
+                : "cloverchat";
         String resolvedTimezone = timezone == null || timezone.isBlank() ? "UTC" : timezone;
         return "jdbc:mysql://" + resolvedHost + ":" + resolvedPort + "/" + resolvedDatabase
                 + "?useUnicode=true"
                 + "&characterEncoding=utf8"
-                + "&useSSL=" + useSsl
+                + "&sslMode=" + sslMode
                 + "&allowPublicKeyRetrieval=" + allowPublicKeyRetrieval
-                + "&serverTimezone=" + resolvedTimezone;
+                + "&serverTimezone=" + urlEncode(resolvedTimezone);
+    }
+
+    private String environmentOrConfig(String environmentName, String path, String fallback) {
+        String environmentValue = System.getenv(environmentName);
+        if (environmentValue != null && !environmentValue.isBlank()) {
+            return environmentValue;
+        }
+        String configured = plugin.configuration().getString(path, fallback);
+        return configured == null ? fallback : configured;
+    }
+
+    private int queueLimit() {
+        return Math.max(1000, Math.min(
+                plugin.configuration().getInt("message-inspector.writer.queue-limit", 10000),
+                100000
+        ));
+    }
+
+    private String poolName() {
+        String configured = plugin.configuration().getString(
+                "message-inspector.database.hikari.pool-name",
+                "CloverChat-MessageInspector"
+        );
+        if (configured == null || !configured.matches("[A-Za-z0-9_.-]{1,64}")) {
+            return "CloverChat-MessageInspector";
+        }
+        return configured;
+    }
+
+    private long connectionTimeout() {
+        return Math.max(3000L, Math.min(
+                plugin.configuration().getLong("message-inspector.database.hikari.connection-timeout-ms", 10000L),
+                60000L
+        ));
+    }
+
+    private long validationTimeout(long connectionTimeout) {
+        return Math.max(1000L, Math.min(
+                plugin.configuration().getLong("message-inspector.database.hikari.validation-timeout-ms", 5000L),
+                connectionTimeout - 1L
+        ));
+    }
+
+    private String normalizeSslMode(String value) {
+        String normalized = value == null ? "VERIFY_IDENTITY" : value.trim().toUpperCase(Locale.ROOT);
+        if (normalized.equals("DISABLED")
+                || normalized.equals("PREFERRED")
+                || normalized.equals("REQUIRED")
+                || normalized.equals("VERIFY_CA")
+                || normalized.equals("VERIFY_IDENTITY")) {
+            return normalized;
+        }
+        return "VERIFY_IDENTITY";
+    }
+
+    private String urlEncode(String value) {
+        try {
+            return URLEncoder.encode(value, StandardCharsets.UTF_8.name());
+        } catch (Exception ignored) {
+            return "UTC";
+        }
     }
 
     private String buildSqliteJdbcUrl(File databaseFile) {
@@ -521,18 +664,30 @@ public final class MessageAuditService {
         if (configuredPath == null || configuredPath.isBlank()) {
             configuredPath = "storage/message-inspector.db";
         }
-
-        File file = new File(configuredPath);
-        if (!file.isAbsolute()) {
-            file = new File(plugin.getDataFolder(), configuredPath);
-        }
-
+        File file = resolveConfinedPath(configuredPath, "storage/message-inspector.db");
         File parent = file.getParentFile();
         if (parent != null && !parent.exists()) {
             parent.mkdirs();
         }
-
         return file;
+    }
+
+    private File resolveConfinedPath(String configuredPath, String fallbackPath) {
+        try {
+            File baseFolder = plugin.getDataFolder().getCanonicalFile();
+            if (!baseFolder.exists()) {
+                baseFolder.mkdirs();
+            }
+            File candidate = new File(baseFolder, configuredPath).getCanonicalFile();
+            Path basePath = baseFolder.toPath();
+            if (candidate.toPath().startsWith(basePath)) {
+                return candidate;
+            }
+            plugin.getLogger().warning("[MessageInspector] Путь вне папки CloverChat отклонён: " + configuredPath);
+            return new File(baseFolder, fallbackPath).getCanonicalFile();
+        } catch (IOException exception) {
+            return new File(plugin.getDataFolder(), fallbackPath).getAbsoluteFile();
+        }
     }
 
     private void createTableIfNeeded(HikariDataSource source) throws Exception {
@@ -595,6 +750,9 @@ public final class MessageAuditService {
                         + "KEY idx_created_at (created_at)"
                         + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             }
+        }
+        if (activeDialect == DatabaseDialect.SQLITE) {
+            hardenFilePermissions(resolveLocalDatabaseFile());
         }
     }
 
@@ -689,20 +847,25 @@ public final class MessageAuditService {
                 + "view_permission = excluded.view_permission";
     }
 
-    private void writeBackup(List<ChatMessageAuditRecord> batch) {
+    private boolean writeBackup(List<ChatMessageAuditRecord> batch) {
         if (!plugin.configuration().getBoolean("message-inspector.backup.enabled", true)) {
-            return;
+            return true;
+        }
+        if (batch == null || batch.isEmpty()) {
+            return true;
         }
 
         String folder = plugin.configuration().getString("message-inspector.backup.folder", "backups/message-inspector");
-        File backupFolder = new File(plugin.getDataFolder(), folder == null ? "backups/message-inspector" : folder);
+        File backupFolder = resolveConfinedPath(
+                folder == null || folder.isBlank() ? "backups/message-inspector" : folder,
+                "backups/message-inspector"
+        );
         if (!backupFolder.exists() && !backupFolder.mkdirs()) {
             logBackupError("Message audit backup folder is not available: " + backupFolder.getAbsolutePath());
-            return;
+            return false;
         }
 
-        String fileName = "messages-" + LocalDate.now() + ".jsonl";
-        File backupFile = new File(backupFolder, fileName);
+        File backupFile = resolveBackupFile(backupFolder);
         try (BufferedWriter writer = Files.newBufferedWriter(
                 backupFile.toPath(),
                 StandardCharsets.UTF_8,
@@ -713,9 +876,90 @@ public final class MessageAuditService {
                 writer.write(toJson(record));
                 writer.newLine();
             }
+            hardenFilePermissions(backupFile);
+            return true;
         } catch (IOException exception) {
             logBackupError("Message audit backup write failed: " + exception.getMessage());
+            return false;
         }
+    }
+
+    private File resolveBackupFile(File backupFolder) {
+        String baseName = "messages-" + LocalDate.now();
+        long maxBytes = Math.max(1L, Math.min(
+                plugin.configuration().getLong("message-inspector.backup.max-file-size-mb", 64L),
+                1024L
+        )) * 1024L * 1024L;
+        for (int index = 0; index < 10000; index++) {
+            String suffix = index == 0 ? "" : "-" + index;
+            File candidate = new File(backupFolder, baseName + suffix + ".jsonl");
+            if (!candidate.exists() || candidate.length() < maxBytes) {
+                return candidate;
+            }
+        }
+        return new File(backupFolder, baseName + "-" + System.currentTimeMillis() + ".jsonl");
+    }
+
+    private void runRetentionIfNeeded(Connection connection) {
+        int retentionDays = plugin.configuration().getInt("message-inspector.retention-days", 90);
+        if (retentionDays <= 0) {
+            return;
+        }
+        int limitedDays = Math.min(retentionDays, 36500);
+        long now = System.currentTimeMillis();
+        if (now - lastRetentionRunMillis < 21600000L) {
+            return;
+        }
+        lastRetentionRunMillis = now;
+        long cutoff = now - limitedDays * 86400000L;
+
+        try (PreparedStatement statement = connection.prepareStatement(
+                "DELETE FROM " + TABLE_NAME + " WHERE created_at < ?"
+        )) {
+            statement.setLong(1, cutoff);
+            statement.executeUpdate();
+        } catch (Exception exception) {
+            logConnectionError("Message audit retention cleanup failed: " + exception.getMessage());
+        }
+
+        cleanupExpiredBackups(cutoff);
+    }
+
+    private void cleanupExpiredBackups(long cutoffMillis) {
+        if (!plugin.configuration().getBoolean("message-inspector.backup.enabled", true)) {
+            return;
+        }
+        String folder = plugin.configuration().getString("message-inspector.backup.folder", "backups/message-inspector");
+        File backupFolder = resolveConfinedPath(
+                folder == null || folder.isBlank() ? "backups/message-inspector" : folder,
+                "backups/message-inspector"
+        );
+        File[] files = backupFolder.listFiles(file -> file.isFile()
+                && file.getName().startsWith("messages-")
+                && file.getName().endsWith(".jsonl"));
+        if (files == null) {
+            return;
+        }
+        for (File file : files) {
+            if (file.lastModified() < cutoffMillis) {
+                try {
+                    Files.deleteIfExists(file.toPath());
+                } catch (IOException exception) {
+                    logBackupError("Could not delete expired backup " + file.getName() + ": " + exception.getMessage());
+                }
+            }
+        }
+    }
+
+    private void hardenFilePermissions(File file) {
+        if (file == null || !file.exists()) {
+            return;
+        }
+        file.setReadable(false, false);
+        file.setWritable(false, false);
+        file.setExecutable(false, false);
+        file.setReadable(true, true);
+        file.setWritable(true, true);
     }
 
     private String toJson(ChatMessageAuditRecord record) {
@@ -739,6 +983,7 @@ public final class MessageAuditService {
                 + "\"z\":" + record.z() + ","
                 + "\"message_raw\":\"" + json(record.rawInput()) + "\","
                 + "\"message_final\":\"" + json(record.chatMessage()) + "\","
+                + "\"final_message_json\":\"" + json(record.finalMessageJson()) + "\","
                 + "\"view_permission\":\"" + json(record.viewPermission()) + "\""
                 + "}";
     }
@@ -768,6 +1013,10 @@ public final class MessageAuditService {
             }
             if (symbol == '\t') {
                 builder.append("\\t");
+                continue;
+            }
+            if (symbol < 0x20) {
+                builder.append(String.format("\\u%04x", (int) symbol));
                 continue;
             }
             builder.append(symbol);
@@ -811,6 +1060,15 @@ public final class MessageAuditService {
         }
         lastBackupErrorLogMillis = now;
         plugin.getLogger().warning("[MessageInspector] " + message);
+    }
+
+    private void logQueueOverflow() {
+        long now = System.currentTimeMillis();
+        if (now - lastQueueOverflowLogMillis < 15000L) {
+            return;
+        }
+        lastQueueOverflowLogMillis = now;
+        plugin.getLogger().warning("[MessageInspector] Очередь переполнена, самые старые записи удаляются");
     }
 
     private enum DatabaseDialect {

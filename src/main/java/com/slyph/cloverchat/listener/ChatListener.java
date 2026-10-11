@@ -1,6 +1,7 @@
 package com.slyph.cloverchat.listener;
 
 import com.slyph.cloverchat.CloverChatPlugin;
+import com.slyph.cloverchat.feature.messageinspect.MessageIdGenerator;
 import com.slyph.cloverchat.feature.messageinspect.model.ChatMessageAuditRecord;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.sound.Sound;
@@ -26,7 +27,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.time.LocalDateTime;
@@ -36,7 +36,6 @@ public final class ChatListener implements Listener {
 
     private static final Pattern LINK_PATTERN = Pattern.compile("(https?://\\S+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern MENTION_PATTERN = Pattern.compile("@([A-Za-z0-9_]{3,16})");
-    private static final AtomicLong MESSAGE_COUNTER = new AtomicLong(0L);
     private static final GsonComponentSerializer MESSAGE_SERIALIZER = GsonComponentSerializer.gson();
 
     private final CloverChatPlugin plugin;
@@ -48,17 +47,15 @@ public final class ChatListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlayerChat(AsyncPlayerChatEvent event) {
         event.setCancelled(true);
-        handleIncomingChat(event.getPlayer().getUniqueId(), event.getMessage());
+        handleIncomingChat(event.getPlayer(), event.getMessage());
     }
 
-    public void handleIncomingChat(UUID senderId, String originalMessage) {
-        plugin.scheduler().runGlobal(() -> {
-            Player sender = Bukkit.getPlayer(senderId);
-            if (sender == null || !sender.isOnline()) {
-                return;
-            }
-            plugin.scheduler().runEntity(sender, () -> handleChat(senderId, originalMessage));
-        });
+    public void handleIncomingChat(Player sender, String originalMessage) {
+        if (sender == null || originalMessage == null) {
+            return;
+        }
+        UUID senderId = sender.getUniqueId();
+        plugin.scheduler().runEntity(sender, () -> handleChat(senderId, originalMessage));
     }
 
     private void handleChat(UUID senderId, String originalMessage) {
@@ -88,8 +85,8 @@ public final class ChatListener implements Listener {
             return;
         }
 
-        chatMessage = censorMessage(chatMessage);
-        MentionResult mentionResult = processMentions(chatMessage);
+        chatMessage = plugin.censorService().censor(chatMessage);
+        MentionResult mentionResult = processMentions(sender, chatMessage);
         chatMessage = mentionResult.formatted;
         String messageTime = buildMessageTime();
         String messageId = buildMessageId();
@@ -97,6 +94,8 @@ public final class ChatListener implements Listener {
         String playerToken = "__cloverchat_player_name__";
         String prefixToken = "__cloverchat_prefix__";
         String reputationToken = "__cloverchat_reputation__";
+        String badgesToken = "__cloverchat_badges__";
+        String badgesSpacedToken = "__cloverchat_badges_spaced__";
         String messageToken = "__cloverchat_message__";
         String format = chatRoute.format;
 
@@ -107,8 +106,8 @@ public final class ChatListener implements Listener {
         format = replaceNamePlaceholders(format, playerToken);
         format = format.replace("%uperms_prefix%", prefixToken);
         format = replaceReputationPlaceholders(format, reputationToken);
-        format = format
-                .replace("%message%", messageToken);
+        format = replaceBadgePlaceholders(format, badgesToken, badgesSpacedToken);
+        format = format.replace("%message%", messageToken);
 
         format = plugin.applyPlaceholders(sender, format);
         if (resolvedPrefix.isBlank()) {
@@ -124,10 +123,13 @@ public final class ChatListener implements Listener {
                 playerToken,
                 prefixToken,
                 reputationToken,
+                badgesToken,
+                badgesSpacedToken,
                 messageToken,
                 resolvedPrefix,
                 resolvedDisplayName,
                 resolvedReputation,
+                resolvedGroup,
                 chatMessage,
                 chatRoute.chatTypeName,
                 messageTime,
@@ -204,45 +206,47 @@ public final class ChatListener implements Listener {
 
     private String resolveServerId() {
         String value = plugin.configuration().getString("proxy-sync.server-id", "server");
-        if (value == null || value.isBlank()) {
-            return "server";
-        }
-        return value;
+        return MessageIdGenerator.sanitizeServerId(value);
     }
 
     private void dispatchMessage(Player sender, ChatRoute chatRoute, Component message) {
-        if (chatRoute.mode == ChatMode.GLOBAL) {
-            for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-                onlinePlayer.sendMessage(message);
-            }
-            return;
-        }
-
-        if (chatRoute.mode == ChatMode.GROUP) {
-            for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-                if (onlinePlayer.getUniqueId().equals(sender.getUniqueId())) {
-                    onlinePlayer.sendMessage(message);
-                    continue;
-                }
-                if (!chatRoute.viewPermission.isBlank() && !onlinePlayer.hasPermission(chatRoute.viewPermission)) {
-                    continue;
-                }
-                onlinePlayer.sendMessage(message);
-            }
-            return;
-        }
-
         double radius = plugin.configuration().getDouble("local-chat.radius", 70.0);
         double radiusSquared = radius * radius;
         Location senderLocation = sender.getLocation();
+        UUID senderWorldId = senderLocation.getWorld() == null ? null : senderLocation.getWorld().getUID();
+        UUID senderId = sender.getUniqueId();
 
         for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-            if (!onlinePlayer.getWorld().equals(senderLocation.getWorld())) {
-                continue;
-            }
-            if (onlinePlayer.getLocation().distanceSquared(senderLocation) <= radiusSquared) {
-                onlinePlayer.sendMessage(message);
-            }
+            plugin.scheduler().runEntity(onlinePlayer, () -> {
+                if (!onlinePlayer.isOnline()) {
+                    return;
+                }
+                if (chatRoute.mode == ChatMode.GLOBAL) {
+                    onlinePlayer.sendMessage(message);
+                    return;
+                }
+                if (chatRoute.mode == ChatMode.GROUP) {
+                    if (!onlinePlayer.getUniqueId().equals(senderId)
+                            && !chatRoute.viewPermission.isBlank()
+                            && !onlinePlayer.hasPermission(chatRoute.viewPermission)) {
+                        return;
+                    }
+                    onlinePlayer.sendMessage(message);
+                    return;
+                }
+                Location receiverLocation = onlinePlayer.getLocation();
+                if (senderWorldId == null
+                        || receiverLocation.getWorld() == null
+                        || !receiverLocation.getWorld().getUID().equals(senderWorldId)) {
+                    return;
+                }
+                double x = receiverLocation.getX() - senderLocation.getX();
+                double y = receiverLocation.getY() - senderLocation.getY();
+                double z = receiverLocation.getZ() - senderLocation.getZ();
+                if (x * x + y * y + z * z <= radiusSquared) {
+                    onlinePlayer.sendMessage(message);
+                }
+            });
         }
     }
 
@@ -252,10 +256,13 @@ public final class ChatListener implements Listener {
             String playerToken,
             String prefixToken,
             String reputationToken,
+            String badgesToken,
+            String badgesSpacedToken,
             String messageToken,
             String resolvedPrefix,
             String resolvedDisplayName,
             String resolvedReputation,
+            String resolvedGroup,
             String messageText,
             String chatTypeName,
             String messageTime,
@@ -268,6 +275,8 @@ public final class ChatListener implements Listener {
             int nextPlayerIndex = input.indexOf(playerToken, currentIndex);
             int nextPrefixIndex = input.indexOf(prefixToken, currentIndex);
             int nextReputationIndex = input.indexOf(reputationToken, currentIndex);
+            int nextBadgesIndex = input.indexOf(badgesToken, currentIndex);
+            int nextBadgesSpacedIndex = input.indexOf(badgesSpacedToken, currentIndex);
             int nextMessageIndex = input.indexOf(messageToken, currentIndex);
 
             int tokenStart = Integer.MAX_VALUE;
@@ -284,6 +293,14 @@ public final class ChatListener implements Listener {
             if (nextReputationIndex >= 0 && nextReputationIndex < tokenStart) {
                 tokenStart = nextReputationIndex;
                 tokenType = "reputation";
+            }
+            if (nextBadgesIndex >= 0 && nextBadgesIndex < tokenStart) {
+                tokenStart = nextBadgesIndex;
+                tokenType = "badges";
+            }
+            if (nextBadgesSpacedIndex >= 0 && nextBadgesSpacedIndex < tokenStart) {
+                tokenStart = nextBadgesSpacedIndex;
+                tokenType = "badges-spaced";
             }
             if (nextMessageIndex >= 0 && nextMessageIndex < tokenStart) {
                 tokenStart = nextMessageIndex;
@@ -308,8 +325,21 @@ public final class ChatListener implements Listener {
             } else if (tokenType.equals("reputation")) {
                 result = result.append(buildReputationComponent(sender, resolvedReputation));
                 currentIndex = tokenStart + reputationToken.length();
+            } else if (tokenType.equals("badges")) {
+                result = result.append(buildBadgesComponent(sender, false));
+                currentIndex = tokenStart + badgesToken.length();
+            } else if (tokenType.equals("badges-spaced")) {
+                result = result.append(buildBadgesComponent(sender, true));
+                currentIndex = tokenStart + badgesSpacedToken.length();
             } else {
-                result = result.append(buildChatMessageComponent(sender, messageText, chatTypeName, messageTime, messageId));
+                result = result.append(buildChatMessageComponent(
+                        sender,
+                        resolvedGroup,
+                        messageText,
+                        chatTypeName,
+                        messageTime,
+                        messageId
+                ));
                 currentIndex = tokenStart + messageToken.length();
             }
         }
@@ -321,9 +351,17 @@ public final class ChatListener implements Listener {
         return result;
     }
 
-    private Component buildChatMessageComponent(Player sender, String messageText, String chatTypeName, String messageTime, String messageId) {
-        String resolvedMessage = plugin.applyPlaceholders(sender, messageText == null ? "" : messageText);
+    private Component buildChatMessageComponent(
+            Player sender,
+            String resolvedGroup,
+            String messageText,
+            String chatTypeName,
+            String messageTime,
+            String messageId
+    ) {
+        String resolvedMessage = messageText == null ? "" : messageText;
         Component messageComponent = parseLinksWithColoredText(resolvedMessage);
+        messageComponent = plugin.messageStyleService().apply(sender, resolvedGroup, messageComponent);
 
         if (!plugin.configuration().getBoolean("message-hover.enabled", true)) {
             return messageComponent;
@@ -340,14 +378,14 @@ public final class ChatListener implements Listener {
         String plainMessage = extractPlainText(resolvedMessage);
         List<String> replaced = new ArrayList<>();
         for (String line : hoverLines) {
-            String resolved = line
+            String resolved = plugin.applyPlaceholders(sender, line)
                     .replace("%player_name%", sender.getName())
                     .replace("%chat_type%", chatTypeName)
                     .replace("%message%", resolvedMessage)
                     .replace("%message_plain%", plainMessage)
                     .replace("%message_time%", messageTime)
                     .replace("%message_id%", messageId);
-            replaced.add(plugin.applyPlaceholders(sender, resolved));
+            replaced.add(resolved);
         }
 
         String hoverText = String.join("\n", replaced);
@@ -562,6 +600,187 @@ public final class ChatListener implements Listener {
             return configured;
         }
         return List.of("%cloverrep_reputation%");
+    }
+
+    private String replaceBadgePlaceholders(String format, String badgesToken, String badgesSpacedToken) {
+        if (format == null || format.isEmpty()) {
+            return format;
+        }
+        return format
+                .replace("%cloverbadges_badge_spaced%", badgesSpacedToken)
+                .replace("%cloverbadges_badges_spaced%", badgesSpacedToken)
+                .replace("%cloverbadges_badge%", badgesToken)
+                .replace("%cloverbadges_badges%", badgesToken);
+    }
+
+    private Component buildBadgesComponent(Player sender, boolean trailingSpace) {
+        List<BadgeHoverData> badges = resolveActiveBadgeHoverData(sender);
+        if (badges.isEmpty()) {
+            return Component.empty();
+        }
+
+        String separatorText = resolveCloverBadgesPlaceholder(sender, "%cloverbadges_separator%");
+        if (separatorText.isEmpty()) {
+            separatorText = " ";
+        }
+
+        Component result = Component.empty();
+        Component separator = plugin.deserializeColored(separatorText);
+        List<String> hoverLines = resolveBadgeHoverLines();
+        boolean hoverEnabled = plugin.hovers().getBoolean("badge-hover.enabled", true) && !hoverLines.isEmpty();
+
+        for (int index = 0; index < badges.size(); index++) {
+            if (index > 0) {
+                result = result.append(separator);
+            }
+
+            BadgeHoverData badge = badges.get(index);
+            Component badgeComponent = plugin.deserializeColored(badge.text);
+            if (hoverEnabled) {
+                List<String> replaced = new ArrayList<>();
+                for (String line : hoverLines) {
+                    String resolved = line
+                            .replace("%player_name%", sender.getName())
+                            .replace("%badge_id%", badge.id)
+                            .replace("%badge_text%", badge.text)
+                            .replace("%badge_name%", badge.name)
+                            .replace("%badge_description%", badge.description)
+                            .replace("%badge_how_to_get%", badge.howToGet)
+                            .replace("%badge_priority%", badge.priority)
+                            .replace("%badge_remaining%", badge.remaining);
+                    replaced.add(plugin.applyPlaceholders(sender, resolved));
+                }
+                String hoverText = String.join("\n", replaced);
+                badgeComponent = badgeComponent.hoverEvent(HoverEvent.showText(plugin.deserializeColored(hoverText)));
+            }
+            result = result.append(badgeComponent);
+        }
+
+        if (trailingSpace) {
+            result = result.append(Component.text(" "));
+        }
+        return result;
+    }
+
+    private List<BadgeHoverData> resolveActiveBadgeHoverData(Player sender) {
+        List<BadgeHoverData> result = new ArrayList<>();
+        for (int slot = 1; slot <= 2; slot++) {
+            String id = resolveCloverBadgesPlaceholder(sender, "%cloverbadges_badge_" + slot + "_id%");
+            String text = resolveCloverBadgesPlaceholder(sender, "%cloverbadges_badge_" + slot + "%");
+            if (id.isEmpty() || text.isEmpty()) {
+                continue;
+            }
+
+            String name = resolveCloverBadgesPlaceholder(sender, "%cloverbadges_badge_" + slot + "_name%");
+            if (name.isEmpty()) {
+                name = id;
+            }
+
+            String description = resolveCloverBadgesPlaceholder(sender, "%cloverbadges_description_" + id + "%");
+            if (description.isEmpty()) {
+                description = missingBadgeDescription();
+            }
+
+            String howToGet = resolveCloverBadgesPlaceholder(sender, "%cloverbadges_how_to_get_" + id + "%");
+            if (howToGet.isEmpty()) {
+                howToGet = missingBadgeHowToGet();
+            }
+
+            String priority = resolveCloverBadgesPlaceholder(sender, "%cloverbadges_priority_" + id + "%");
+            String remaining = resolveCloverBadgesPlaceholder(sender, "%cloverbadges_expires_" + id + "%");
+            result.add(new BadgeHoverData(id, text, name, description, howToGet, priority, remaining));
+        }
+        return result;
+    }
+
+    private String resolveCloverBadgesPlaceholder(Player sender, String placeholder) {
+        if (!plugin.isPlaceholderApiHooked()) {
+            return "";
+        }
+        String resolved = plugin.applyPlaceholders(sender, placeholder);
+        if (resolved == null || resolved.isBlank() || resolved.equalsIgnoreCase(placeholder)) {
+            return "";
+        }
+        return resolved;
+    }
+
+    private List<String> resolveBadgeHoverLines() {
+        List<String> configured = plugin.hovers().getStringList("badge-hover.lines");
+        if (!configured.isEmpty()) {
+            return configured;
+        }
+
+        String language = plugin.activeLanguage();
+        if (language.equals("en")) {
+            return Arrays.asList(
+                    "%badge_text% &#E0E0E0— %badge_name%",
+                    "&7",
+                    "&#B8C2C2 ▪ Description",
+                    "%badge_description%",
+                    "&7",
+                    "&#73FF86 ◆ How to get",
+                    "%badge_how_to_get%"
+            );
+        }
+        if (language.equals("de")) {
+            return Arrays.asList(
+                    "%badge_text% &#E0E0E0— %badge_name%",
+                    "&7",
+                    "&#B8C2C2 ▪ Beschreibung",
+                    "%badge_description%",
+                    "&7",
+                    "&#73FF86 ◆ So erhältst du es",
+                    "%badge_how_to_get%"
+            );
+        }
+        if (language.equals("ua")) {
+            return Arrays.asList(
+                    "%badge_text% &#E0E0E0— %badge_name%",
+                    "&7",
+                    "&#B8C2C2 ▪ Опис",
+                    "%badge_description%",
+                    "&7",
+                    "&#73FF86 ◆ Як отримати",
+                    "%badge_how_to_get%"
+            );
+        }
+        return Arrays.asList(
+                "%badge_text% &#E0E0E0— %badge_name%",
+                "&7",
+                "&#B8C2C2 ▪ Описание",
+                "%badge_description%",
+                "&7",
+                "&#73FF86 ◆ Как получить",
+                "%badge_how_to_get%"
+        );
+    }
+
+    private String missingBadgeDescription() {
+        String language = plugin.activeLanguage();
+        if (language.equals("en")) {
+            return "&8Description is not specified.";
+        }
+        if (language.equals("de")) {
+            return "&8Keine Beschreibung angegeben.";
+        }
+        if (language.equals("ua")) {
+            return "&8Опис не вказано.";
+        }
+        return "&8Описание не указано.";
+    }
+
+    private String missingBadgeHowToGet() {
+        String language = plugin.activeLanguage();
+        if (language.equals("en")) {
+            return "&8Acquisition method is not specified.";
+        }
+        if (language.equals("de")) {
+            return "&8Erhaltmethode nicht angegeben.";
+        }
+        if (language.equals("ua")) {
+            return "&8Спосіб отримання не вказано.";
+        }
+        return "&8Способ получения не указан.";
     }
 
     private Component buildPrefixComponent(Player sender, String prefixText) {
@@ -795,9 +1014,7 @@ public final class ChatListener implements Listener {
     }
 
     private String buildMessageId() {
-        String timePart = Long.toString(System.currentTimeMillis(), 36).toUpperCase(Locale.ROOT);
-        String counterPart = Long.toString(MESSAGE_COUNTER.incrementAndGet(), 36).toUpperCase(Locale.ROOT);
-        return timePart + "-" + counterPart;
+        return MessageIdGenerator.create(resolveServerId());
     }
 
     private String resolveUltraPermissionsGroup(Player sender) {
@@ -875,7 +1092,7 @@ public final class ChatListener implements Listener {
         return result;
     }
 
-    private MentionResult processMentions(String text) {
+    private MentionResult processMentions(Player sender, String text) {
         Matcher matcher = MENTION_PATTERN.matcher(text);
         String mentionFormat = plugin.messages().getString("mention.highlight-format", "&6@%mention%");
         Set<Player> mentionedPlayers = new LinkedHashSet<>();
@@ -883,7 +1100,7 @@ public final class ChatListener implements Listener {
 
         while (matcher.find()) {
             String mentionName = matcher.group(1);
-            Player target = findOnlinePlayer(mentionName);
+            Player target = findOnlinePlayer(sender, mentionName);
 
             if (target != null) {
                 mentionedPlayers.add(target);
@@ -898,14 +1115,15 @@ public final class ChatListener implements Listener {
         return new MentionResult(result.toString(), mentionedPlayers);
     }
 
-    private Player findOnlinePlayer(String name) {
+    private Player findOnlinePlayer(Player viewer, String name) {
         Player exact = Bukkit.getPlayerExact(name);
-        if (exact != null && exact.isOnline()) {
+        if (exact != null && exact.isOnline() && (viewer == null || viewer.canSee(exact))) {
             return exact;
         }
 
         for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-            if (onlinePlayer.getName().equalsIgnoreCase(name)) {
+            if (onlinePlayer.getName().equalsIgnoreCase(name)
+                    && (viewer == null || viewer.canSee(onlinePlayer))) {
                 return onlinePlayer;
             }
         }
@@ -919,69 +1137,25 @@ public final class ChatListener implements Listener {
         }
 
         String soundKey = plugin.configuration().getString("mention.sound", "minecraft:block.note_block.pling");
-        Sound sound;
+        if (soundKey == null || soundKey.isBlank()) {
+            soundKey = "minecraft:block.note_block.pling";
+        }
+        Sound resolvedSound;
 
         try {
-            sound = Sound.sound(Key.key(soundKey), Sound.Source.PLAYER, 1.0f, 1.0f);
+            resolvedSound = Sound.sound(Key.key(soundKey), Sound.Source.PLAYER, 1.0f, 1.0f);
         } catch (IllegalArgumentException ignored) {
-            sound = Sound.sound(Key.key("minecraft:block.note_block.pling"), Sound.Source.PLAYER, 1.0f, 1.0f);
+            resolvedSound = Sound.sound(Key.key("minecraft:block.note_block.pling"), Sound.Source.PLAYER, 1.0f, 1.0f);
         }
+        Sound sound = resolvedSound;
 
         for (Player player : mentionedPlayers) {
-            if (player.isOnline()) {
-                player.playSound(sound);
-            }
+            plugin.scheduler().runEntity(player, () -> {
+                if (player.isOnline()) {
+                    player.playSound(sound);
+                }
+            });
         }
-    }
-
-    private String censorMessage(String message) {
-        if (!plugin.configuration().getBoolean("censor.enabled", true)) {
-            return message;
-        }
-
-        List<String> badWords = plugin.configuration().getStringList("censor.words");
-        if (badWords.isEmpty()) {
-            return message;
-        }
-
-        String result = message;
-
-        for (String badWord : badWords) {
-            if (badWord == null || badWord.isBlank()) {
-                continue;
-            }
-
-            Pattern pattern = Pattern.compile("(?iu)(?<![\\p{L}\\p{N}_])" + Pattern.quote(badWord) + "(?![\\p{L}\\p{N}_])");
-            Matcher matcher = pattern.matcher(result);
-            StringBuffer replaced = new StringBuffer();
-
-            while (matcher.find()) {
-                String found = matcher.group();
-                String masked = maskWord(found);
-                matcher.appendReplacement(replaced, Matcher.quoteReplacement(masked));
-            }
-
-            matcher.appendTail(replaced);
-            result = replaced.toString();
-        }
-
-        return result;
-    }
-
-    private String maskWord(String word) {
-        if (word.length() <= 2) {
-            return "*".repeat(word.length());
-        }
-
-        StringBuilder builder = new StringBuilder();
-        builder.append(word.charAt(0));
-
-        for (int index = 1; index < word.length() - 1; index++) {
-            builder.append('*');
-        }
-
-        builder.append(word.charAt(word.length() - 1));
-        return builder.toString();
     }
 
     private enum ChatMode {
@@ -1044,6 +1218,34 @@ public final class ChatListener implements Listener {
         private MentionResult(String formatted, Set<Player> mentionedPlayers) {
             this.formatted = formatted;
             this.mentionedPlayers = mentionedPlayers;
+        }
+    }
+
+    private static final class BadgeHoverData {
+        private final String id;
+        private final String text;
+        private final String name;
+        private final String description;
+        private final String howToGet;
+        private final String priority;
+        private final String remaining;
+
+        private BadgeHoverData(
+                String id,
+                String text,
+                String name,
+                String description,
+                String howToGet,
+                String priority,
+                String remaining
+        ) {
+            this.id = id;
+            this.text = text;
+            this.name = name;
+            this.description = description;
+            this.howToGet = howToGet;
+            this.priority = priority;
+            this.remaining = remaining;
         }
     }
 }

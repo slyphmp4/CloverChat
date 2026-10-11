@@ -14,17 +14,32 @@ permissions:
 
 jobs:
   publish-pre-release:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_branch == 'master'
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify Trusted Revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_SHA="${{ github.event.workflow_run.head_sha }}"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          git fetch --no-tags origin master
+          git merge-base --is-ancestor "$EXPECTED_SHA" origin/master
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
           java-version: "25"
@@ -34,21 +49,41 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build
-        run: ./gradlew build --no-daemon
+        run: ./gradlew build --no-daemon --dependency-verification=strict
+
+      - name: Prepare Release Files
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd build/libs
+            sha256sum CloverChat.jar > CloverChat.jar.sha256
+          )
+          ./gradlew dependencies --configuration runtimeClasspath --no-daemon --dependency-verification=strict \
+            > build/libs/CloverChat-dependencies.txt
 
       - name: Prepare Tag
         id: tag
+        shell: bash
         run: |
+          set -euo pipefail
           SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
-          echo "value=pre-${{ github.run_number }}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "value=pre-${{ github.run_number }}-$SHORT_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Publish Pre-Release
-        uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ steps.tag.outputs.value }}
-          name: ${{ steps.tag.outputs.value }}
-          artifacts: build/libs/*.jar
-          prerelease: true
-          allowUpdates: true
-          removeArtifacts: true
-          generateReleaseNotes: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.value }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" \
+            build/libs/CloverChat.jar \
+            build/libs/CloverChat.jar.sha256 \
+            build/libs/CloverChat-dependencies.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$RELEASE_SHA" \
+            --title "$RELEASE_TAG" \
+            --prerelease \
+            --generate-notes
