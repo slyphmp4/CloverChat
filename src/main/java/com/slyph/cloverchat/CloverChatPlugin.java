@@ -14,6 +14,7 @@ import com.slyph.cloverchat.feature.messagestyle.MessageStyleService;
 import com.slyph.cloverchat.feature.proxysync.VelocityProxyChatService;
 import com.slyph.cloverchat.feature.updatechecker.UpdateCheckerService;
 import com.slyph.cloverchat.integration.cloverbadges.CloverBadgesMessageColorBridge;
+import com.slyph.cloverchat.listener.CardboardChatBridge;
 import com.slyph.cloverchat.listener.ChatListener;
 import com.slyph.cloverchat.listener.CommandCooldownListener;
 import com.slyph.cloverchat.listener.JoinQuitListener;
@@ -62,6 +63,7 @@ public final class CloverChatPlugin extends JavaPlugin {
     private FileConfiguration hoversConfiguration;
     private FileConfiguration autoMessagesConfiguration;
     private boolean modernChatBridgeEnabled;
+    private boolean cardboardCompatibilityMode;
     private boolean fabricRuntime;
     private String activeLanguage = DEFAULT_LANGUAGE;
 
@@ -81,10 +83,14 @@ public final class CloverChatPlugin extends JavaPlugin {
         velocityProxyChatService = new VelocityProxyChatService(this);
 
         ChatListener chatListener = new ChatListener(this);
+        cardboardCompatibilityMode = isCardboardServer();
         fabricRuntime = isFabricRuntime();
-        if (fabricRuntime) {
+        if (fabricRuntime || cardboardCompatibilityMode) {
             modernChatBridgeEnabled = false;
             getServer().getPluginManager().registerEvents(chatListener, this);
+            if (cardboardCompatibilityMode) {
+                getServer().getPluginManager().registerEvents(new CardboardChatBridge(chatListener), this);
+            }
         } else {
             modernChatBridgeEnabled = new ModernChatBridge(this, chatListener).register();
             if (!modernChatBridgeEnabled) {
@@ -342,6 +348,18 @@ public final class CloverChatPlugin extends JavaPlugin {
         return normalized;
     }
 
+    private boolean isCardboardServer() {
+        String serverName = getServer().getName();
+        String serverVersion = getServer().getVersion();
+        String bukkitVersion = getServer().getBukkitVersion();
+        String fingerprint = String.join(" ",
+                serverName == null ? "" : serverName,
+                serverVersion == null ? "" : serverVersion,
+                bukkitVersion == null ? "" : bukkitVersion
+        ).toLowerCase(Locale.ROOT);
+        return fingerprint.contains("cardboard");
+    }
+
     private void logStartupBanner() {
         String version = getDescription().getVersion();
         String placeholderApiStatus = placeholderApiHooked ? "Подключен" : "Не найден";
@@ -351,8 +369,9 @@ public final class CloverChatPlugin extends JavaPlugin {
         String messageInspectorStatus = messageAuditService != null && messageAuditService.isEnabled() ? "Включен" : "Выключен";
         String messageInspectorProfile = messageAuditService == null ? "-" : messageAuditService.activeProfileName();
         String schedulerMode = compatScheduler != null && compatScheduler.isFolia() ? "Folia" : "Paper/Spigot";
-        String chatMode = modernChatBridgeEnabled
-                ? "AsyncChatEvent (Paper)"
+        String chatMode = cardboardCompatibilityMode
+                ? "AsyncPlayerChatEvent + PlayerChatEvent fallback"
+                : modernChatBridgeEnabled ? "AsyncChatEvent (Paper)"
                 : fabricRuntime ? "AsyncPlayerChatEvent (Fabric/Cardboard)" : "AsyncPlayerChatEvent";
 
         getLogger().info("");
