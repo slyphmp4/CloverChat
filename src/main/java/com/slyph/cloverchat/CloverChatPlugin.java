@@ -7,11 +7,13 @@ import com.slyph.cloverchat.command.completer.CloverChatTabCompleter;
 import com.slyph.cloverchat.command.completer.PrivateMessageTabCompleter;
 import com.slyph.cloverchat.command.completer.ReloadTabCompleter;
 import com.slyph.cloverchat.feature.automessage.AutoMessageService;
+import com.slyph.cloverchat.feature.cache.ChatCacheService;
 import com.slyph.cloverchat.feature.censor.CensorService;
 import com.slyph.cloverchat.feature.headmessage.HeadMessageService;
 import com.slyph.cloverchat.feature.messageinspect.MessageAuditService;
 import com.slyph.cloverchat.feature.messagestyle.MessageStyleService;
 import com.slyph.cloverchat.feature.proxysync.VelocityProxyChatService;
+import com.slyph.cloverchat.feature.redis.RedisChatService;
 import com.slyph.cloverchat.feature.updatechecker.UpdateCheckerService;
 import com.slyph.cloverchat.integration.cloverbadges.CloverBadgesMessageColorBridge;
 import com.slyph.cloverchat.listener.CardboardChatBridge;
@@ -22,7 +24,6 @@ import com.slyph.cloverchat.listener.ModernChatBridge;
 import com.slyph.cloverchat.listener.QuickPrivateMessageListener;
 import com.slyph.cloverchat.util.CompatScheduler;
 import com.slyph.cloverchat.util.ColorUtil;
-import me.clip.placeholderapi.PlaceholderAPI;
 import net.kyori.adventure.text.Component;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
@@ -50,6 +51,7 @@ public final class CloverChatPlugin extends JavaPlugin {
     private static final String DEFAULT_LANGUAGE = "ru";
 
     private boolean placeholderApiHooked;
+    private ChatCacheService chatCacheService;
     private CompatScheduler compatScheduler;
     private CensorService censorService;
     private HeadMessageService headMessageService;
@@ -59,6 +61,7 @@ public final class CloverChatPlugin extends JavaPlugin {
     private UpdateCheckerService updateCheckerService;
     private AutoMessageService autoMessageService;
     private VelocityProxyChatService velocityProxyChatService;
+    private RedisChatService redisChatService;
     private FileConfiguration messagesConfiguration;
     private FileConfiguration hoversConfiguration;
     private FileConfiguration autoMessagesConfiguration;
@@ -72,6 +75,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         saveDefaultConfig();
         loadAdditionalConfigurations();
         placeholderApiHooked = getServer().getPluginManager().isPluginEnabled("PlaceholderAPI");
+        chatCacheService = new ChatCacheService(this);
         compatScheduler = new CompatScheduler(this);
         censorService = new CensorService(this);
         headMessageService = new HeadMessageService(this);
@@ -81,6 +85,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         updateCheckerService = new UpdateCheckerService(this);
         autoMessageService = new AutoMessageService(this);
         velocityProxyChatService = new VelocityProxyChatService(this);
+        redisChatService = new RedisChatService(this);
 
         ChatListener chatListener = new ChatListener(this);
         cardboardCompatibilityMode = isCardboardServer();
@@ -126,6 +131,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         updateCheckerService.start();
         autoMessageService.start();
         velocityProxyChatService.start();
+        redisChatService.start();
         logStartupBanner();
     }
 
@@ -145,6 +151,9 @@ public final class CloverChatPlugin extends JavaPlugin {
         }
         if (velocityProxyChatService != null) {
             velocityProxyChatService.stop();
+        }
+        if (redisChatService != null) {
+            redisChatService.stop();
         }
     }
 
@@ -166,6 +175,26 @@ public final class CloverChatPlugin extends JavaPlugin {
 
     public boolean isPlaceholderApiHooked() {
         return placeholderApiHooked;
+    }
+
+    public ChatCacheService chatCacheService() {
+        return chatCacheService;
+    }
+
+    public String messageFormat(String path, String fallback) {
+        return chatCacheService.format(path, fallback);
+    }
+
+    public List<String> hoverLines(String path) {
+        return chatCacheService.hoverLines(path);
+    }
+
+    public Component deserializeFormat(String text) {
+        return chatCacheService.formatComponent(text);
+    }
+
+    public Component deserializeHover(String text) {
+        return chatCacheService.hoverComponent(text);
     }
 
     public String activeLanguage() {
@@ -200,6 +229,10 @@ public final class CloverChatPlugin extends JavaPlugin {
         return velocityProxyChatService;
     }
 
+    public RedisChatService redisChatService() {
+        return redisChatService;
+    }
+
     public String applyColor(String text) {
         return ColorUtil.colorize(text, configuration().getBoolean("hex-colors", true));
     }
@@ -215,7 +248,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         if (!placeholderApiHooked || player == null) {
             return text;
         }
-        return PlaceholderAPI.setPlaceholders(player, text);
+        return chatCacheService.placeholders(player, text);
     }
 
     public void sendConfiguredLines(CommandSender recipient, Player placeholderContext, List<String> lines) {
@@ -231,6 +264,9 @@ public final class CloverChatPlugin extends JavaPlugin {
     public void reloadPluginConfiguration() {
         reloadConfig();
         loadAdditionalConfigurations();
+        if (chatCacheService != null) {
+            chatCacheService.reload();
+        }
         if (censorService != null) {
             censorService.reload();
         }
@@ -248,6 +284,9 @@ public final class CloverChatPlugin extends JavaPlugin {
         }
         if (velocityProxyChatService != null) {
             velocityProxyChatService.restart();
+        }
+        if (redisChatService != null) {
+            redisChatService.restart();
         }
     }
 
@@ -366,6 +405,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         String updateCheckerStatus = configuration().getBoolean("update-checker.enabled", true) ? "Включена" : "Выключена";
         String autoMessagesStatus = autoMessages() != null && autoMessages().getBoolean("enabled", false) ? "Включены" : "Выключены";
         String proxySyncStatus = configuration().getBoolean("proxy-sync.enabled", false) ? "Включен" : "Выключен";
+        String proxyTransport = configuration().getString("proxy-sync.transport", "VELOCITY").toUpperCase(Locale.ROOT);
         String messageInspectorStatus = messageAuditService != null && messageAuditService.isEnabled() ? "Включен" : "Выключен";
         String messageInspectorProfile = messageAuditService == null ? "-" : messageAuditService.activeProfileName();
         String schedulerMode = compatScheduler != null && compatScheduler.isFolia() ? "Folia" : "Paper/Spigot";
@@ -385,7 +425,7 @@ public final class CloverChatPlugin extends JavaPlugin {
         getLogger().info(boxLine("PlaceholderAPI: " + placeholderApiStatus));
         getLogger().info(boxLine("Проверка обновлений: " + updateCheckerStatus));
         getLogger().info(boxLine("Автосообщения: " + autoMessagesStatus));
-        getLogger().info(boxLine("Proxy Sync (Velocity): " + proxySyncStatus));
+        getLogger().info(boxLine("Proxy Sync (" + proxyTransport + "): " + proxySyncStatus));
         getLogger().info(boxLine("Message Inspector: " + messageInspectorStatus + " (" + messageInspectorProfile + ")"));
         getLogger().info(boxLine("Scheduler: " + schedulerMode));
         getLogger().info(boxLine("Конфиги: config.yml | auto-messages.yml | langs/" + activeLanguage + "/"));

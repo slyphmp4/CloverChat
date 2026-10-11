@@ -138,12 +138,9 @@ public final class ChatListener implements Listener {
         dispatchMessage(sender, chatRoute, finalMessage);
         if (chatRoute.mode == ChatMode.GLOBAL) {
             plugin.proxyChatSyncService().forwardGlobalMessage(sender, messageId, finalMessage);
+            plugin.redisChatService().forwardGlobalMessage(sender, messageId, finalMessage);
         }
-        if (chatRoute.mode == ChatMode.GROUP) {
-            plugin.headMessageService().clear(sender.getUniqueId());
-        } else {
-            plugin.headMessageService().show(sender, chatMessage);
-        }
+        plugin.headMessageService().show(sender, chatMessage, chatRoute.mode.name());
         plugin.messageAuditService().trackMessage(buildAuditRecord(
                 sender,
                 originalMessage,
@@ -317,7 +314,7 @@ public final class ChatListener implements Listener {
 
             String before = input.substring(currentIndex, tokenStart);
             if (!before.isEmpty()) {
-                result = result.append(parseLinksWithColoredText(before));
+                result = result.append(parseLinksWithColoredText(before, true));
             }
 
             if (tokenType.equals("player")) {
@@ -349,7 +346,7 @@ public final class ChatListener implements Listener {
         }
 
         if (currentIndex < input.length()) {
-            result = result.append(parseLinksWithColoredText(input.substring(currentIndex)));
+            result = result.append(parseLinksWithColoredText(input.substring(currentIndex), true));
         }
 
         return result;
@@ -371,9 +368,9 @@ public final class ChatListener implements Listener {
             return messageComponent;
         }
 
-        List<String> hoverLines = plugin.hovers().getStringList("message-hover.lines");
+        List<String> hoverLines = plugin.hoverLines("message-hover.lines");
         if (hoverLines.isEmpty()) {
-            hoverLines = plugin.hovers().getStringList("message-hover-text");
+            hoverLines = plugin.hoverLines("message-hover-text");
         }
         if (hoverLines.isEmpty()) {
             return messageComponent;
@@ -411,7 +408,7 @@ public final class ChatListener implements Listener {
         boolean globalEnabled = plugin.configuration().getBoolean("global-chat.enabled", true);
         String globalPrefix = plugin.configuration().getString("global-chat.prefix", "!");
         if (globalEnabled && globalPrefix != null && !globalPrefix.isBlank() && originalMessage.startsWith(globalPrefix)) {
-            String format = plugin.messages().getString("global-chat.format", "&7[&6G&7] &f%player_name% &8» &f%message%");
+            String format = plugin.messageFormat("global-chat.format", "&7[&6G&7] &f%player_name% &8» &f%message%");
             String chatTypeName = plugin.messages().getString("chat-types.global", "Global");
             return ChatRoute.global(globalPrefix.length(), format, chatTypeName);
         }
@@ -420,7 +417,7 @@ public final class ChatListener implements Listener {
             return ChatRoute.blocked();
         }
 
-        String format = plugin.messages().getString("local-chat.format", "&7[&aL&7] &f%player_name% &8» &f%message%");
+        String format = plugin.messageFormat("local-chat.format", "&7[&aL&7] &f%player_name% &8» &f%message%");
         String chatTypeName = plugin.messages().getString("chat-types.local", "Local");
         return ChatRoute.local(format, chatTypeName);
     }
@@ -485,8 +482,8 @@ public final class ChatListener implements Listener {
             return ChatRoute.blocked();
         }
 
-        String defaultFormat = plugin.messages().getString("group-chat.default-format", "&7[&d%channel%&7] &f%player_name% &8» &f%message%");
-        String format = plugin.messages().getString("group-chat.formats." + matched.key, defaultFormat);
+        String defaultFormat = plugin.messageFormat("group-chat.default-format", "&7[&d%channel%&7] &f%player_name% &8» &f%message%");
+        String format = plugin.messageFormat("group-chat.formats." + matched.key, defaultFormat);
         if (format == null || format.isBlank()) {
             format = defaultFormat;
         }
@@ -512,7 +509,7 @@ public final class ChatListener implements Listener {
         String shownName = displayName == null || displayName.isBlank() ? senderName : displayName;
         Component nameComponent = plugin.deserializeColored(shownName);
 
-        List<String> hoverLines = plugin.hovers().getStringList("hover-text");
+        List<String> hoverLines = plugin.hoverLines("hover-text");
         if (hoverLines.isEmpty()) {
             return nameComponent;
         }
@@ -525,7 +522,7 @@ public final class ChatListener implements Listener {
 
         String hoverText = String.join("\n", replaced);
         return nameComponent
-                .hoverEvent(HoverEvent.showText(plugin.deserializeColored(hoverText)))
+                .hoverEvent(HoverEvent.showText(plugin.deserializeHover(hoverText)))
                 .clickEvent(ClickEvent.suggestCommand("/m " + senderName + " "));
     }
 
@@ -655,7 +652,7 @@ public final class ChatListener implements Listener {
                     replaced.add(plugin.applyPlaceholders(sender, resolved));
                 }
                 String hoverText = String.join("\n", replaced);
-                badgeComponent = badgeComponent.hoverEvent(HoverEvent.showText(plugin.deserializeColored(hoverText)));
+                badgeComponent = badgeComponent.hoverEvent(HoverEvent.showText(plugin.deserializeHover(hoverText)));
             }
             result = result.append(badgeComponent);
         }
@@ -709,7 +706,7 @@ public final class ChatListener implements Listener {
     }
 
     private List<String> resolveBadgeHoverLines() {
-        List<String> configured = plugin.hovers().getStringList("badge-hover.lines");
+        List<String> configured = plugin.hoverLines("badge-hover.lines");
         if (!configured.isEmpty()) {
             return configured;
         }
@@ -805,7 +802,7 @@ public final class ChatListener implements Listener {
         }
 
         String hoverText = String.join("\n", replaced);
-        return prefixComponent.hoverEvent(HoverEvent.showText(plugin.deserializeColored(hoverText)));
+        return prefixComponent.hoverEvent(HoverEvent.showText(plugin.deserializeHover(hoverText)));
     }
 
     private Component buildReputationComponent(Player sender, String reputationText) {
@@ -818,7 +815,7 @@ public final class ChatListener implements Listener {
             return reputationComponent;
         }
 
-        List<String> hoverLines = plugin.hovers().getStringList("reputation-hover.lines");
+        List<String> hoverLines = plugin.hoverLines("reputation-hover.lines");
         if (!hoverLines.isEmpty()) {
             List<String> replaced = new ArrayList<>();
             for (String line : hoverLines) {
@@ -828,7 +825,7 @@ public final class ChatListener implements Listener {
                 replaced.add(plugin.applyPlaceholders(sender, resolved));
             }
             String hoverText = String.join("\n", replaced);
-            reputationComponent = reputationComponent.hoverEvent(HoverEvent.showText(plugin.deserializeColored(hoverText)));
+            reputationComponent = reputationComponent.hoverEvent(HoverEvent.showText(plugin.deserializeHover(hoverText)));
         }
 
         String suggestCommand = plugin.configuration().getString("reputation-hover.suggest-command", "/rep ");
@@ -859,7 +856,7 @@ public final class ChatListener implements Listener {
             String group = resolveUltraPermissionsGroup(sender);
             for (ConfigurationSection rule : rules) {
                 if (matchesPrefixRule(rule, sender, prefixText, group)) {
-                    List<String> lines = rule.getStringList("lines");
+                    List<String> lines = plugin.hoverLines(rule.getCurrentPath() + ".lines");
                     if (!lines.isEmpty()) {
                         return lines;
                     }
@@ -867,12 +864,12 @@ public final class ChatListener implements Listener {
             }
         }
 
-        List<String> defaultLines = plugin.hovers().getStringList("prefix-hover.default-lines");
+        List<String> defaultLines = plugin.hoverLines("prefix-hover.default-lines");
         if (!defaultLines.isEmpty()) {
             return defaultLines;
         }
 
-        return plugin.hovers().getStringList("prefix-hover-text");
+        return plugin.hoverLines("prefix-hover-text");
     }
 
     private boolean matchesPrefixRule(ConfigurationSection rule, Player sender, String prefixText, String group) {
@@ -1047,12 +1044,16 @@ public final class ChatListener implements Listener {
     }
 
     private Component parseLinksWithColoredText(String input) {
+        return parseLinksWithColoredText(input, false);
+    }
+
+    private Component parseLinksWithColoredText(String input, boolean cacheFormat) {
         if (input == null || input.isEmpty()) {
             return Component.empty();
         }
 
         if (!plugin.configuration().getBoolean("links.enabled", true)) {
-            return plugin.deserializeColored(input);
+            return cacheFormat ? plugin.deserializeFormat(input) : plugin.deserializeColored(input);
         }
 
         Matcher matcher = LINK_PATTERN.matcher(input);
@@ -1064,16 +1065,16 @@ public final class ChatListener implements Listener {
             String url = matcher.group(1);
 
             if (!beforeLink.isEmpty()) {
-                result = result.append(plugin.deserializeColored(beforeLink));
+                result = result.append(cacheFormat ? plugin.deserializeFormat(beforeLink) : plugin.deserializeColored(beforeLink));
             }
 
-            String linkFormat = plugin.messages().getString("links.format", "&e*ссылка*");
-            Component linkComponent = plugin.deserializeColored(linkFormat)
+            String linkFormat = plugin.messageFormat("links.format", "&e*ссылка*");
+            Component linkComponent = plugin.deserializeFormat(linkFormat)
                     .clickEvent(ClickEvent.openUrl(url));
 
-            List<String> hoverLines = plugin.hovers().getStringList("links.hover-lines");
+            List<String> hoverLines = plugin.hoverLines("links.hover-lines");
             if (hoverLines.isEmpty()) {
-                hoverLines = plugin.hovers().getStringList("links.hover");
+                hoverLines = plugin.hoverLines("links.hover");
             }
 
             if (!hoverLines.isEmpty()) {
@@ -1082,7 +1083,7 @@ public final class ChatListener implements Listener {
                     replacedHover.add(line.replace("%url%", url));
                 }
                 String hoverText = String.join("\n", replacedHover);
-                linkComponent = linkComponent.hoverEvent(HoverEvent.showText(plugin.deserializeColored(hoverText)));
+                linkComponent = linkComponent.hoverEvent(HoverEvent.showText(plugin.deserializeHover(hoverText)));
             }
 
             result = result.append(linkComponent);
@@ -1090,7 +1091,8 @@ public final class ChatListener implements Listener {
         }
 
         if (lastEnd < input.length()) {
-            result = result.append(plugin.deserializeColored(input.substring(lastEnd)));
+            String trailing = input.substring(lastEnd);
+            result = result.append(cacheFormat ? plugin.deserializeFormat(trailing) : plugin.deserializeColored(trailing));
         }
 
         return result;
@@ -1098,7 +1100,7 @@ public final class ChatListener implements Listener {
 
     private MentionResult processMentions(Player sender, String text) {
         Matcher matcher = MENTION_PATTERN.matcher(text);
-        String mentionFormat = plugin.messages().getString("mention.highlight-format", "&6@%mention%");
+        String mentionFormat = plugin.messageFormat("mention.highlight-format", "&6@%mention%");
         Set<Player> mentionedPlayers = new LinkedHashSet<>();
         StringBuffer result = new StringBuffer();
 
