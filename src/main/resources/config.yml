@@ -25,6 +25,60 @@ hex-colors: true
 # Available now: ru, ua, en, de
 language: "ru"
 
+
+# ============================================================
+# CHAT CACHE
+# ============================================================
+# Три независимые области: форматы, hover и значения PlaceholderAPI.
+# TTL задается в миллисекундах: 1000 = 1 секунда, 60000 = 1 минута.
+# enabled: false или ttl-millis: 0 отключает соответствующий кэш.
+# При /cloverchatreload confirm все кэши пересоздаются.
+# Результаты PAPI разделены по UUID игрока; неизвестные плейсхолдеры
+# не кэшируются. Текст сообщения, его время и ID не подменяются кэшем.
+# max-entries ограничивает каждый внутренний буфер этой области.
+
+chat-cache:
+  enabled: true
+
+  formats:
+    enabled: true
+    ttl-millis: 60000
+    max-entries: 4096
+
+  hovers:
+    enabled: true
+    ttl-millis: 60000
+    max-entries: 4096
+
+  placeholderapi:
+    enabled: true
+    ttl-millis: 1000
+    max-entries: 10000
+
+    # Правило применяется только к указанному плейсхолдеру.
+    # replacements заменяет только ТОЧНОЕ значение, с учетом регистра.
+    # Например, from: "0" не заменит "10" или "&a0".
+    # Цвета в to поддерживаются как обычно: &7, &FF0000, &#FF0000.
+    # rules: [] оставляет все плейсхолдеры без отдельных правил.
+    rules:
+      - placeholder: "%cloverrep_reputation%"
+        ttl-millis: 1000
+        replacements: []
+
+      # Пример для часто меняющихся данных: не кэшировать значение.
+      - placeholder: "%player_health%"
+        ttl-millis: 0
+        replacements: []
+
+      # Пример точной замены; раскомментируйте для применения.
+      # - placeholder: "%example_status%"
+      #   ttl-millis: 3000
+      #   replacements:
+      #     - from: "online"
+      #       to: "&aВ сети"
+      #     - from: "offline"
+      #       to: "&7Не в сети"
+
 # ----------------------------
 # Ваши заметки (GENERAL)
 #
@@ -71,6 +125,12 @@ update-checker:
 proxy-sync:
   enabled: false
 
+  # VELOCITY - прежняя передача через прокси, без Redis.
+  # REDIS - передача через Redis Pub/Sub, независимо от прокси.
+  # Работает только один транспорт, чтобы не дублировать сообщения.
+  # В обоих режимах передается ТОЛЬКО глобальный чат.
+  transport: "VELOCITY"
+
   # Уникальное имя этого backend-сервера
   server-id: "survival"
 
@@ -104,6 +164,67 @@ proxy-sync:
 
     # %server% = server-id источника
     format: "&#65798F[&#AFCFFF%server%&#65798F] "
+
+  # Для Redis: enabled: true, transport: REDIS, уникальный server-id
+  # и одинаковый shared-secret / CLOVERCHAT_PROXY_SECRET на серверах.
+  # Redis Pub/Sub не хранит сообщения и не доставляет пропущенную историю.
+  # При недоступности Redis обычный чат на сервере продолжает работать.
+  redis:
+    # STANDALONE - один Redis; SENTINEL - поиск текущего master;
+    # CLUSTER - несколько узлов с автоматическим обновлением топологии.
+    mode: "STANDALONE"
+    channel: "cloverchat:global"
+    timeout-millis: 5000
+    retry-seconds: 10
+    request-queue-limit: 512
+
+    # ACL-пользователь Redis. Пустой username = старый AUTH по паролю.
+    # Лучше использовать CLOVERCHAT_REDIS_USERNAME и
+    # CLOVERCHAT_REDIS_PASSWORD вместо хранения пароля в файле.
+    username: ""
+    password: ""
+
+    ssl:
+      # Для удаленного Redis используйте TLS и порт TLS вашего сервера.
+      enabled: false
+      # Проверяет сертификат и имя узла. Не отключайте на публичной сети.
+      verify-peer: true
+      # Специальный режим Lettuce для совместимого StartTLS endpoint.
+      # Для стандартного TLS-порта Redis оставляйте false.
+      # Начальная команда может быть незашифрованной: этот режим
+      # запрещен с ACL/паролем. Для них используйте обычный TLS.
+      start-tls: false
+
+    standalone:
+      host: "127.0.0.1"
+      port: 6379
+
+    sentinel:
+      master-name: "mymaster"
+      # Sentinel может иметь отдельную ACL-учетную запись.
+      # CLOVERCHAT_REDIS_SENTINEL_USERNAME / _PASSWORD также поддержаны.
+      username: ""
+      password: ""
+      ssl:
+        enabled: false
+        verify-peer: true
+        start-tls: false
+      nodes:
+        - host: "127.0.0.1"
+          port: 26379
+        - host: "127.0.0.1"
+          port: 26380
+
+    cluster:
+      # Стартовые адреса; все найденные узлы должны быть доступны
+      # backend-серверам Minecraft, включая адреса из топологии Redis.
+      nodes:
+        - host: "127.0.0.1"
+          port: 7000
+        - host: "127.0.0.1"
+          port: 7001
+        - host: "127.0.0.1"
+          port: 7002
 
 # ----------------------------
 # Ваши заметки (VELOCITY)
@@ -403,6 +524,8 @@ mention:
 # ============================================================
 # CHAT ABOVE HEAD
 # ============================================================
+# Отображаются только LOCAL и GLOBAL. Закрытые групповые каналы
+# и личные сообщения никогда не создают общий пузырь над головой.
 
 chat-above-head:
   enabled: true

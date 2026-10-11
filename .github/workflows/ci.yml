@@ -31,6 +31,40 @@ jobs:
       - name: Grant Execute Permission
         run: chmod +x gradlew
 
+      - name: Prepare Redis Test Fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          FIXTURE="$RUNNER_TEMP/cloverchat-redis"
+          mkdir -p "$FIXTURE"
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout "$FIXTURE/redis.key" -out "$FIXTURE/redis.crt" \
+            -days 1 -subj '/CN=localhost' -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1'
+          keytool -importcert -noprompt -alias redis-fixture \
+            -file "$FIXTURE/redis.crt" -keystore "$FIXTURE/truststore.p12" \
+            -storepass fixture-only -storetype PKCS12
+          cp scripts/redis-fixture.sh "$FIXTURE/redis-fixture.sh"
+          docker run -d --name cloverchat-redis-tests \
+            -p 127.0.0.1:16379:16379 -p 127.0.0.1:16443:16443 \
+            -p 127.0.0.1:26389:26389 -p 127.0.0.1:17000-17002:17000-17002 \
+            --mount "type=bind,source=$FIXTURE,target=/fixture,readonly" \
+            redis:7.4-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499 \
+            sh /fixture/redis-fixture.sh
+          READY=false
+          for _ in $(seq 1 60); do
+            if docker exec cloverchat-redis-tests test -f /tmp/clover-redis/ready; then
+              READY=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$READY" != true ]; then
+            docker logs cloverchat-redis-tests
+            exit 1
+          fi
+          echo 'CLOVERCHAT_REDIS_TESTS=true' >> "$GITHUB_ENV"
+          echo "CLOVERCHAT_REDIS_TEST_TRUSTSTORE=$FIXTURE/truststore.p12" >> "$GITHUB_ENV"
+
       - name: Build
         run: ./gradlew build --no-daemon --dependency-verification=strict
 
@@ -68,6 +102,23 @@ jobs:
             -o "$SMOKE_DIR/paper.jar"
           printf '%s  %s\n' "$PAPER_SHA256" "$SMOKE_DIR/paper.jar" | sha256sum --check --strict
           cp build/libs/CloverChat.jar "$SMOKE_DIR/plugins/CloverChat.jar"
+          mkdir -p "$SMOKE_DIR/plugins/CloverChat"
+          cat > "$SMOKE_DIR/plugins/CloverChat/config.yml" <<'EOF'
+          language: en
+          proxy-sync:
+            enabled: true
+            transport: REDIS
+            server-id: ci-paper
+            shared-secret: ci-only-secret-012345678901234567890123456789
+            redis:
+              mode: STANDALONE
+              channel: cloverchat:test:paper
+              username: clover
+              password: test-only-password
+              standalone:
+                host: 127.0.0.1
+                port: 16379
+          EOF
           printf 'eula=true\n' > "$SMOKE_DIR/eula.txt"
           printf '%s\n' \
             'online-mode=false' \
@@ -94,6 +145,16 @@ jobs:
             exit 1
           fi
           grep -Fq "[CloverChat] Enabling CloverChat v$PLUGIN_VERSION" server.log
+          for _ in $(seq 1 20); do
+            if grep -Fq '[Redis] Connected: STANDALONE' server.log; then
+              break
+            fi
+            sleep 1
+          done
+          if ! grep -Fq '[Redis] Connected: STANDALONE' server.log; then
+            cat server.log
+            exit 1
+          fi
           printf 'stop\n' >&"${SERVER[1]}"
           wait "$SERVER_PROCESS"
           grep -Fq "[CloverChat] Disabling CloverChat v$PLUGIN_VERSION" server.log
@@ -102,6 +163,10 @@ jobs:
             exit 1
           fi
           grep -E '\[CloverChat\] (Enabling|Disabling)|Done \(' server.log
+
+      - name: Stop Redis Test Fixture
+        if: always()
+        run: docker rm -f cloverchat-redis-tests || true
 
       - name: Upload Artifacts
         if: always()

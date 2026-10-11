@@ -108,11 +108,11 @@ public final class PrivateMessageCommand implements CommandExecutor {
         }
 
         String message = plugin.censorService().censor(String.join(" ", Arrays.copyOfRange(args, 1, args.length)));
-        String senderFormat = plugin.messages().getString(
+        String senderFormat = plugin.messageFormat(
                 "private-chat.format-sender",
                 "&7[&aВы &8→ &f%target_name%&7] &f%message%"
         );
-        String receiverFormat = plugin.messages().getString(
+        String receiverFormat = plugin.messageFormat(
                 "private-chat.format-receiver",
                 "&7[&f%player_name% &8→ &aВам&7] &f%message%"
         );

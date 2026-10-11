@@ -32,9 +32,56 @@ It is intentionally modular: features can be disabled independently, and integra
 | Interaction | Mentions, clickable links, prefix/message hovers and message IDs |
 | Moderation | Persistent message inspector with SQLite or MySQL storage |
 | Immersion | Configurable messages above player heads |
-| Network | Signed Velocity plugin-message synchronization for global chat |
+| Network | Signed Velocity or Redis synchronization for global chat |
+| Performance | Separate bounded format, hover and per-player PAPI caches |
 | Server messages | Join/leave messages, censorship and automatic announcements |
 | Localization | Russian, English, Ukrainian and German language files |
+
+---
+
+## Chat Cache and Redis
+
+`chat-cache` in `config.yml` controls independent format, hover and PlaceholderAPI
+caches. Each area has an enable switch, `ttl-millis` and bounded `max-entries`.
+PlaceholderAPI values are keyed by player UUID and individual placeholder.
+Per-placeholder `rules` can override TTL and replace exact, case-sensitive values.
+Set a rule's TTL to zero for live values such as health. Unknown placeholders are
+not cached; message text, timestamps and IDs are rendered per message. Reload
+recreates the caches, and quitting clears that player's PAPI entries.
+
+Messages in group channels and private messages never appear above player heads.
+
+For Redis, set `proxy-sync.enabled: true` and `proxy-sync.transport: REDIS`.
+Keep a unique `server-id` per backend, a common channel and a shared signing secret
+of at least 32 UTF-8 bytes, preferably in `CLOVERCHAT_PROXY_SECRET`.
+`VELOCITY` remains the default transport. The transports are mutually exclusive
+and forward only global chat, never group channels, local chat or private messages.
+
+Supported Redis modes are `STANDALONE`, `SENTINEL` and `CLUSTER`. Configure the
+corresponding endpoint section under `proxy-sync.redis`. Sentinel credentials
+are separate from Redis data-node credentials. Prefer environment variables
+`CLOVERCHAT_REDIS_USERNAME`, `CLOVERCHAT_REDIS_PASSWORD`,
+`CLOVERCHAT_REDIS_SENTINEL_USERNAME` and `CLOVERCHAT_REDIS_SENTINEL_PASSWORD`.
+All discovered Cluster endpoints must be reachable from each Minecraft backend.
+
+Use `ssl.enabled: true` and `ssl.verify-peer: true` with a normal Redis TLS port.
+For private certificate authorities, import the CA into the JVM trust store or
+configure Java's `javax.net.ssl.trustStore` and `javax.net.ssl.trustStorePassword`.
+The advanced `start-tls` option is Lettuce's StartTLS mode for a compatible custom
+endpoint, not an automatic upgrade on a normal Redis port. It is rejected when
+ACL/password credentials are configured, because its first write can be plaintext.
+Use direct TLS for authenticated connections. Sentinel has independent TLS settings.
+
+Redis messages use the same mandatory HMAC-SHA256 signing, age limits, packet
+limits and replay protection as Velocity. Connections are asynchronous relative
+to the server thread, command queues are bounded, and connection failures do not
+disable local chat. Redis Pub/Sub is live delivery: messages sent during an outage
+are not queued for later playback. This is not durable message storage.
+
+CI exercises real Redis Standalone, Sentinel, Cluster and verified TLS/ACL
+connections, and starts Paper 26.2 with the shaded Redis client enabled.
+The client behavior follows the [Lettuce Pub/Sub documentation](https://redis.github.io/lettuce/user-guide/pubsub/)
+and [Lettuce SSL documentation](https://redis.github.io/lettuce/advanced-usage/ssl-connections/).
 
 ---
 
@@ -51,6 +98,7 @@ CloverChat keeps `api-version: 1.16` and its normal bytecode target at Java 11 f
 | PlaceholderAPI | Optional |
 | CloverBadges | Optional |
 | Velocity | Optional, for global-chat sync |
+| Redis | Optional, Standalone / Sentinel / Cluster, ACL and TLS |
 
 Use the Java version required by your Minecraft server. Modern 26.2 servers require their modern Java runtime even though CloverChat's own main bytecode target remains Java 11.
 

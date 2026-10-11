@@ -25,8 +25,12 @@ public final class HeadMessageService {
         this.plugin = plugin;
     }
 
-    public void show(Player player, String message) {
+    public void show(Player player, String message, String chatMode) {
         if (player == null || !player.isOnline()) {
+            return;
+        }
+        if (!HeadMessagePolicy.allows(chatMode)) {
+            clear(player.getUniqueId());
             return;
         }
         if (!plugin.configuration().getBoolean("chat-above-head.enabled", true)) {
@@ -205,7 +209,7 @@ public final class HeadMessageService {
     }
 
     private String buildRendered(Player player, String message, int comboCount) {
-        String format = plugin.messages().getString("chat-above-head.format", "&#8fe8ff%message%");
+        String format = plugin.messageFormat("chat-above-head.format", "&#8fe8ff%message%");
         String messageToken = "__cloverchat_head_message__";
         String rendered = (format == null ? "" : format)
                 .replace("%message%", messageToken)
@@ -213,7 +217,7 @@ public final class HeadMessageService {
 
         if (plugin.configuration().getBoolean("chat-above-head.combo-enabled", true) && comboCount > 1) {
             int comboExtra = comboCount - 1;
-            String comboFormat = plugin.messages().getString("chat-above-head.combo-format", " &#9fff9f(+%combo%)");
+            String comboFormat = plugin.messageFormat("chat-above-head.combo-format", " &#9fff9f(+%combo%)");
             String suffix = (comboFormat == null ? "" : comboFormat)
                     .replace("%combo%", String.valueOf(comboExtra))
                     .replace("%combo_total%", String.valueOf(comboCount));

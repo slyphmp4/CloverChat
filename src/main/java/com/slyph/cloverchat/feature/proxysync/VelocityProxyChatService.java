@@ -34,7 +34,8 @@ public final class VelocityProxyChatService implements PluginMessageListener {
 
     public void start() {
         stop();
-        if (!plugin.configuration().getBoolean("proxy-sync.enabled", false)) {
+        if (!plugin.configuration().getBoolean("proxy-sync.enabled", false)
+                || !"VELOCITY".equalsIgnoreCase(plugin.configuration().getString("proxy-sync.transport", "VELOCITY"))) {
             return;
         }
 

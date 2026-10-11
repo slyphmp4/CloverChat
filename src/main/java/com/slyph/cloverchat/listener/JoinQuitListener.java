@@ -43,6 +43,7 @@ public final class JoinQuitListener implements Listener {
         event.setQuitMessage(null);
         event.quitMessage(null);
         Player leftPlayer = event.getPlayer();
+        plugin.chatCacheService().invalidatePlayer(leftPlayer.getUniqueId());
         plugin.headMessageService().clear(leftPlayer.getUniqueId());
         if (!plugin.configuration().getBoolean("leave-message.enabled", true)) {
             return;

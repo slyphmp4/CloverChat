@@ -72,7 +72,7 @@ public final class QuickPrivateMessageListener implements Listener {
             );
         }
 
-        List<String> hoverLines = plugin.hovers().getStringList("quick-pm.hover-lines");
+        List<String> hoverLines = plugin.hoverLines("quick-pm.hover-lines");
         Component hoverComponent = null;
         if (!hoverLines.isEmpty()) {
             List<String> resolvedHoverLines = new ArrayList<>();
