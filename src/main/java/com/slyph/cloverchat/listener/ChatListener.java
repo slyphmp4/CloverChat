@@ -139,7 +139,11 @@ public final class ChatListener implements Listener {
         if (chatRoute.mode == ChatMode.GLOBAL) {
             plugin.proxyChatSyncService().forwardGlobalMessage(sender, messageId, finalMessage);
         }
-        plugin.headMessageService().show(sender, chatMessage);
+        if (chatRoute.mode == ChatMode.GROUP) {
+            plugin.headMessageService().clear(sender.getUniqueId());
+        } else {
+            plugin.headMessageService().show(sender, chatMessage);
+        }
         plugin.messageAuditService().trackMessage(buildAuditRecord(
                 sender,
                 originalMessage,
