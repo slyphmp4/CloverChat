@@ -2,6 +2,7 @@ package com.slyph.cloverchat.listener;
 
 import com.slyph.cloverchat.CloverChatPlugin;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
@@ -10,6 +11,7 @@ import org.bukkit.plugin.EventExecutor;
 
 import java.lang.reflect.Method;
 import java.util.logging.Level;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class ModernChatBridge {
 
@@ -18,11 +20,7 @@ public final class ModernChatBridge {
     private Method getPlayerMethod;
     private Method messageMethod;
     private Method setCancelledMethod;
-    private boolean executionErrorLogged;
-    private boolean serializerInitAttempted;
-    private Object plainTextSerializer;
-    private Method plainTextSerializeMethod;
-    private Method plainTextFactoryMethod;
+    private final AtomicBoolean executionErrorLogged = new AtomicBoolean();
 
     public ModernChatBridge(CloverChatPlugin plugin, ChatListener chatListener) {
         this.plugin = plugin;
@@ -73,51 +71,21 @@ public final class ModernChatBridge {
                 return;
             }
 
-            setCancelledMethod.invoke(event, true);
             Object rawMessage = messageMethod.invoke(event);
             String message = resolveMessageText(rawMessage);
+            setCancelledMethod.invoke(event, true);
             chatListener.handleIncomingChat(player, message);
         } catch (Exception exception) {
-            if (!executionErrorLogged) {
-                executionErrorLogged = true;
+            if (executionErrorLogged.compareAndSet(false, true)) {
                 plugin.getLogger().log(Level.WARNING, "[Chat] Ошибка обработки AsyncChatEvent", exception);
             }
         }
     }
 
-    private String resolveMessageText(Object rawMessage) {
+    static String resolveMessageText(Object rawMessage) {
         if (rawMessage instanceof Component) {
-            return serializePlain((Component) rawMessage);
+            return PlainTextComponentSerializer.plainText().serialize((Component) rawMessage);
         }
-        if (rawMessage == null) {
-            return "";
-        }
-        return rawMessage.toString();
-    }
-
-    private String serializePlain(Component component) {
-        if (!serializerInitAttempted) {
-            serializerInitAttempted = true;
-            try {
-                Class<?> serializerClass = Class.forName("net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer");
-                plainTextFactoryMethod = serializerClass.getMethod("plainText");
-                plainTextSerializeMethod = serializerClass.getMethod("serialize", Component.class);
-                plainTextSerializer = plainTextFactoryMethod.invoke(null);
-            } catch (Exception ignored) {
-                plainTextSerializer = null;
-                plainTextSerializeMethod = null;
-            }
-        }
-
-        if (plainTextSerializer != null && plainTextSerializeMethod != null) {
-            try {
-                Object serialized = plainTextSerializeMethod.invoke(plainTextSerializer, component);
-                return serialized == null ? "" : serialized.toString();
-            } catch (Exception ignored) {
-                return component.toString();
-            }
-        }
-
-        return component.toString();
+        return rawMessage == null ? "" : rawMessage.toString();
     }
 }
