@@ -75,6 +75,25 @@ configurations {
             )
         }
     }
+    minecraft26_3CompileClasspath {
+        canBeConsumed = false
+        canBeResolved = true
+        extendsFrom implementation
+        attributes {
+            attribute(
+                    org.gradle.api.attributes.Usage.USAGE_ATTRIBUTE,
+                    objects.named(org.gradle.api.attributes.Usage, org.gradle.api.attributes.Usage.JAVA_API)
+            )
+            attribute(
+                    org.gradle.api.attributes.Category.CATEGORY_ATTRIBUTE,
+                    objects.named(org.gradle.api.attributes.Category, org.gradle.api.attributes.Category.LIBRARY)
+            )
+            attribute(
+                    org.gradle.api.attributes.java.TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE,
+                    25
+            )
+        }
+    }
 }
 
 dependencies {
@@ -91,6 +110,8 @@ dependencies {
     testRuntimeOnly 'com.destroystokyo.paper:paper-api:1.16.5-R0.1-SNAPSHOT'
     minecraft26_2CompileClasspath 'io.papermc.paper:paper-api:26.2.build.112-stable'
     minecraft26_2CompileClasspath 'me.clip:placeholderapi:2.11.6'
+    minecraft26_3CompileClasspath 'io.papermc.paper:paper-api:26.3.build.256-stable'
+    minecraft26_3CompileClasspath 'me.clip:placeholderapi:2.11.6'
 }
 
 dependencyLocking {
@@ -113,6 +134,16 @@ tasks.register('compileMinecraft26_2Java', JavaCompile) {
     source sourceSets.main.java
     classpath = configurations.minecraft26_2CompileClasspath
     destinationDirectory = layout.buildDirectory.dir('classes/java/minecraft26_2')
+    javaCompiler = javaToolchains.compilerFor {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+    options.release = 25
+}
+
+tasks.register('compileMinecraft26_3Java', JavaCompile) {
+    source sourceSets.main.java
+    classpath = configurations.minecraft26_3CompileClasspath
+    destinationDirectory = layout.buildDirectory.dir('classes/java/minecraft26_3')
     javaCompiler = javaToolchains.compilerFor {
         languageVersion = JavaLanguageVersion.of(25)
     }
@@ -152,5 +183,5 @@ tasks.build {
 }
 
 tasks.check {
-    dependsOn tasks.compileMinecraft26_2Java
+    dependsOn tasks.compileMinecraft26_2Java, tasks.compileMinecraft26_3Java
 }
