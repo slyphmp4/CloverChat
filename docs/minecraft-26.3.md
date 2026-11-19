@@ -14,10 +14,13 @@ The `check` task includes:
 - Compilation against the Paper 26.2 API (Java 25).
 - Compilation against the Paper 26.3 API (Java 25).
 
-GitHub Actions additionally starts real Paper **26.2** and **26.3** servers
-with the shaded CloverChat JAR, verifies the plugin's enable/disable lifecycle
-and Redis connection, and checks startup logs for linkage and classloading
-errors. This is a startup smoke test, **not** an end-to-end player chat test.
+GitHub Actions additionally starts real Paper **26.2**, Paper **26.3**,
+and **Fabric 26.3 + Cardboard 26.3.0** servers with the shaded CloverChat JAR.
+It verifies plugin enable/disable, Redis connectivity, and startup logs for
+linkage and classloading errors. This is a startup smoke test, **not** an
+end-to-end player chat test. The Fabric and Cardboard artifacts are fetched
+from their official release sources; Cardboard and Fabric API file hashes
+are checked before use.
 
 ## Manual integration matrix
 
@@ -43,6 +46,11 @@ Use a staging server and back up `plugins/CloverChat/` first.
 
 ## Important compatibility notes
 
+- On Cardboard 26.3.0, startup logs warn that the `PlayerChatEvent`
+  fallback forces chat onto the server thread. This fallback currently protects
+  Cardboard versions that do not reliably provide Paper's modern chat event.
+  It must not be removed without an actual two-player chat regression test.
+  The warning is a performance consideration, not a load failure.
 - Keep `plugin.yml`'s old `api-version`: raising it to 26.3 would
   unnecessarily prevent installation on older versions.
 - The Paper 26.3 library belongs only to the compile-time verification
