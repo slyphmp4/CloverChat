@@ -1,0 +1,108 @@
+name: Publish CloverChat v1.11.0 once
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cloverchat-v1.11.0-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.repository == 'slyphmp4/CloverChat' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'master' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact successful CI commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify candidate and no existing stable release
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          git fetch --no-tags origin master
+          test "$(git rev-parse origin/master)" = "$EXPECTED_SHA"
+          VERSION=$(sed -n 's/^pluginVersion=//p' gradle.properties)
+          if [[ "$VERSION" != '1.11.0' ]]; then
+            echo 'Release candidate is not 1.11.0; skipping.'
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if gh release view 'v1.11.0' --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'v1.11.0 already published; skipping.'
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo 'publish=true' >> "$GITHUB_OUTPUT"
+
+      - name: Setup Java
+        if: steps.gate.outputs.publish == 'true'
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Build verified release JAR
+        if: steps.gate.outputs.publish == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew clean build --no-daemon --dependency-verification=strict
+          test -s build/libs/CloverChat.jar
+          ( cd build/libs && sha256sum CloverChat.jar > CloverChat.jar.sha256 )
+          ./gradlew dependencies --configuration runtimeClasspath --no-daemon --dependency-verification=strict > build/libs/CloverChat-dependencies.txt
+
+      - name: Publish stable v1.11.0
+        if: steps.gate.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/CloverChat-v1.11.0-notes.md <<'NOTES'
+          # CloverChat 1.11.0
+
+          Minecraft 26.3 compatibility update with legacy support preserved.
+
+          - Independently compiled against Paper API 26.2 and 26.3 (Java 25), while retaining Java 11-compatible plugin bytecode.
+          - Modern chat bridge updated for Adventure serializer compatibility, with unit tests.
+          - Dependency lockfile and SHA-256 verification metadata refreshed.
+          - CI checked real Paper 26.2, Paper 26.3, and Fabric 26.3 + Cardboard 26.3.0 startup/shutdown and Redis connectivity.
+          - Includes the ready-to-install shaded CloverChat.jar, SHA-256 checksum, and dependency list.
+
+          **Compatibility note:** Cardboard 26.3 warns about the deprecated PlayerChatEvent fallback, which can delay chat handling. Automated smoke tests cover server startup and Redis, not interactive player-chat behavior; test messaging, permissions, placeholders, and proxy routing on a staging server before production deployment.
+          NOTES
+          gh release create v1.11.0 \
+            build/libs/CloverChat.jar \
+            build/libs/CloverChat.jar.sha256 \
+            build/libs/CloverChat-dependencies.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$EXPECTED_SHA" \
+            --title 'CloverChat v1.11.0' \
+            --notes-file /tmp/CloverChat-v1.11.0-notes.md \
+            --latest
