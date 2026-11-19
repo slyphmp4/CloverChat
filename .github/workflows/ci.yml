@@ -83,6 +83,10 @@ jobs:
         shell: bash
         run: bash scripts/paper-smoke.sh 26.2 26.3
 
+      - name: Smoke Test Fabric 26.3 with Cardboard 26.3.0
+        shell: bash
+        run: bash scripts/cardboard-smoke.sh
+
       - name: Stop Redis Test Fixture
         if: always()
         run: docker rm -f cloverchat-redis-tests || true
